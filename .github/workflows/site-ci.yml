@@ -1,10 +1,10 @@
 name: Shared CMS checks
 on:
   pull_request:
-    paths: ['platform-cms/**', 'production/**', '.github/workflows/site-*.yml']
+    paths: ['platform-cms/**', 'production/**', 'scripts/*site*monitor*.py', '.github/workflows/site-*.yml']
   push:
     branches: [main, production-foundation-20261019]
-    paths: ['platform-cms/**', 'production/**', '.github/workflows/site-*.yml']
+    paths: ['platform-cms/**', 'production/**', 'scripts/*site*monitor*.py', '.github/workflows/site-*.yml']
 permissions:
   contents: read
 concurrency:
@@ -23,6 +23,8 @@ jobs:
           node-version: '24'
           cache: npm
           cache-dependency-path: platform-cms/package-lock.json
+      - name: Verify bounded external monitoring and incident policy
+        run: python3 -m unittest discover -s scripts -p test_site_review_monitor.py
       - name: Install locked application dependencies
         working-directory: platform-cms
         run: npm ci --no-audit --no-fund
