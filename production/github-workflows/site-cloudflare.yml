@@ -2,30 +2,53 @@
 name: Deploy Cloudflare review
 on:
   workflow_dispatch:
-  # Enable only after real Access config and the first verified manual deployment:
-  # push:
-  #   branches: [main]
-  #   paths: ['platform-cms/**', 'production/**', 'scripts/cms-backup-*.py', '.github/workflows/site-cloudflare.yml']
+  workflow_run:
+    workflows: ['Shared CMS checks']
+    types: [completed]
+    branches: [main, production-foundation-20261019]
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: derech-cloudflare-review
   cancel-in-progress: false
 jobs:
   deploy:
-    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/production-foundation-20261019') && (github.event_name == 'workflow_dispatch' || vars.DERECH_CF_AUTO_DEPLOY_ENABLED == 'true')
+    # This must be a repository-level flag: environment vars are unavailable at jobs.if.
+    if: >-
+      (github.event_name == 'workflow_dispatch' &&
+       (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/production-foundation-20261019')) ||
+      (github.event_name == 'workflow_run' && vars.DERECH_CF_AUTO_DEPLOY_ENABLED == 'true' &&
+       github.event.workflow_run.name == 'Shared CMS checks' &&
+       github.event.workflow_run.event == 'push' && github.event.workflow_run.status == 'completed' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.repository.full_name == github.repository &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'production-foundation-20261019'))
     environment: derech-cloudflare-review
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      WORKERS_CI_COMMIT_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+      DERECH_DEPLOY_BRANCH: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name }}
+      DERECH_CF_AUTO_DEPLOY_ENABLED: ${{ vars.DERECH_CF_AUTO_DEPLOY_ENABLED }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+          repository: ${{ github.repository }}
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '24'
           cache: npm
           cache-dependency-path: platform-cms/package-lock.json
+      - name: Refuse an untrusted, superseded or application-free source
+        env:
+          GH_READ_TOKEN: ${{ github.token }}
+        run: |
+          node production/test-cloudflare-cd-policy.mjs
+          node production/cloudflare-cd-policy.mjs
       - name: Install locked dependencies
         working-directory: platform-cms
         run: npm ci --no-audit --no-fund
@@ -55,13 +78,7 @@ jobs:
         env:
           GH_READ_TOKEN: ${{ github.token }}
         run: |
-          node --input-type=module - <<'JS'
-          const {GITHUB_REPOSITORY:repo,GITHUB_REF_NAME:branch,GITHUB_SHA:expected,GH_READ_TOKEN:token}=process.env;
-          if (!['main','production-foundation-20261019'].includes(branch)) throw new Error('Unapproved deployment branch');
-          const response=await fetch(`https://api.github.com/repos/${repo}/git/ref/heads/${encodeURIComponent(branch)}`,{redirect:'error',headers:{authorization:`Bearer ${token}`,accept:'application/vnd.github+json','x-github-api-version':'2022-11-28'},signal:AbortSignal.timeout(15000)});
-          if (!response.ok) throw new Error('Cannot verify current source branch');
-          if ((await response.json()).object?.sha!==expected) throw new Error('This deployment source was superseded; use the newer run');
-          JS
+          node production/cloudflare-cd-policy.mjs
       - name: Apply schema-only migrations to isolated review DB
         working-directory: platform-cms
         env:
@@ -76,7 +93,9 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          GH_READ_TOKEN: ${{ github.token }}
         run: |
+          node ../production/cloudflare-cd-policy.mjs
           node scripts/validate-cloudflare-artifact.mjs "$RUNNER_TEMP/derech-cloudflare.json"
           npx wrangler deploy --config dist/server/wrangler.json
           node scripts/verify-cloudflare-live.mjs "$RUNNER_TEMP/derech-cloudflare.json"

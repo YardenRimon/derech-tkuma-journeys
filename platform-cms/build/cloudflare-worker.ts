@@ -12,9 +12,12 @@ export default {
    headers.set(ACCESS_DIAGNOSTIC_SCOPE_HEADER,'1');
    reportAccessHeaderPresence('worker',headers.has('cf-access-jwt-assertion'));
   }
+  // Construct once: Request(input) transfers a POST stream, even when the asset
+  // classifier returns null without reading it. A second copy from input throws.
+  const sanitizedRequest=new Request(request,{headers});
   const response=config.PLATFORM_RELEASE_STAGE!=='review'||!config.CF_ACCESS_ISSUER||!config.CF_ACCESS_AUDIENCE
    ?new Response('Review identity configuration unavailable',{status:503})
-   :await serveCloudflareBuildAsset(new Request(request,{headers}),env as Cloudflare.Env & {ASSETS?:{fetch:(request:Request)=>Promise<Response>}})??await handler.fetch(new Request(request,{headers}),env,ctx);
+   :await serveCloudflareBuildAsset(sanitizedRequest,env as Cloudflare.Env & {ASSETS?:{fetch:(request:Request)=>Promise<Response>}})??await handler.fetch(sanitizedRequest,env,ctx);
   const result=new Response(response.body,response);result.headers.set('x-robots-tag','noindex, nofollow');
   if(/^[a-f0-9]{40}$/.test(config.PLATFORM_RELEASE_SHA??''))result.headers.set('x-derech-release',config.PLATFORM_RELEASE_SHA!);
   return result;

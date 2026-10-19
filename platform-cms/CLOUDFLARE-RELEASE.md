@@ -79,3 +79,10 @@ The complete GitHub release build and source/backup/contact checks must precede 
 Normal CMS `npm test` includes the machine-execution boundary test; `npm run test:machine-http` is a separate loopback-only denial suite for the existing local HTTP stage. It sends no accepted machine packet and does not switch the live connector. Native Site tests remain self-contained: outer backup receiver/Python/storage tests belong in repository CI rather than the standalone CMS package test command.
 
 The CI preparation template is copied from the current actual GitHub CI, then extended with backup-receiver path filters, cryptographic receiver/security tests, Python upload/notification tests and a real local workerd/R2 test. Those checks use generated local fixtures and no provider credentials or public uploads. Actual `.github` workflow installation, GitHub source synchronization and CI/deployment readback remain root-owned.
+
+
+## Mutation request streams — 20 October
+
+The standalone Worker must construct the sanitized `Request` exactly once, then pass that same object through the build-asset classifier and Vinext. Constructing two `Request` objects from the original transfers its POST body on the first construction and makes the second throw before the CMS route can return its JSON error. The classifier does not read non-static request bodies. This preserves streaming upload limits and byte identity without buffering, cloning a second stream, changing MIME handling, or relaxing Access/CMS authorization.
+
+`node scripts/test-cloudflare-request-workerd.mjs` exercises the actual wrapper in local workerd with the installed Vinext header-cloning code and force-dynamic fetch patch. Binary `image/webp` POST, UTF8 JSON POST and JSON PATCH retain exact method/path/MIME/length/SHA256 through isolated local R2 put/get; noindex/source headers and removal of caller Sites identity remain checked. It is included in the focused Cloudflare release suite. This transport fixture uses no real Access identity or provider network and does not itself prove a live authenticated upload or application-level file validation.
