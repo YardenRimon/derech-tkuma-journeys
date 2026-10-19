@@ -9,7 +9,8 @@ permissions:
   contents: read
 concurrency:
   group: site-ci-${{ github.ref }}
-  cancel-in-progress: true
+  # An enabled push run can own a protected reusable deployment; never interrupt it on a new push.
+  cancel-in-progress: ${{ !(github.event_name == 'push' && vars.DERECH_CF_VERIFIED_JOB_DEPLOY_ENABLED == 'true') }}
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -75,3 +76,17 @@ jobs:
         run: |
           python3 -m unittest discover -s production -p 'test_*.py'
           python3 -m unittest discover -s production/seo -p 'test_*.py'
+  deploy-review:
+    needs: verify
+    if: >-
+      github.event_name == 'push' && needs.verify.result == 'success' &&
+      vars.DERECH_CF_VERIFIED_JOB_DEPLOY_ENABLED == 'true' &&
+      github.repository == 'YardenRimon/derech-tkuma-journeys' &&
+      github.event.repository.full_name == github.repository &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/production-foundation-20261019')
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/site-cloudflare.yml
+    with:
+      verify_result: ${{ needs.verify.result }}

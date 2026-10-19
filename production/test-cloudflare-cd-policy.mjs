@@ -23,7 +23,7 @@ checkApplicationSource(candidate, { head: sourceSha, exists: () => true });
 assert.throws(() => checkApplicationSource(candidate, { head: 'b'.repeat(40), exists: () => true }));
 assert.throws(() => checkApplicationSource(candidate, { head: sourceSha, exists: path => !path.startsWith('platform-cms/') }), /application_source_missing/, 'main workflow-only skeleton must fail before credentials/provider steps');
 
-function transport({ current = sourceSha, ci = run, status = 200, failure = false } = {}) {
+function transport({ current = sourceSha, ci = run, jobs, status = 200, failure = false } = {}) {
   const calls = [];
   return { calls, fetcher: async (url, init) => {
     calls.push(url);
@@ -31,7 +31,7 @@ function transport({ current = sourceSha, ci = run, status = 200, failure = fals
     assert.equal(init.redirect, 'error');
     assert.equal(init.headers.authorization, 'Bearer private-test-token');
     if (failure) throw new Error('private-token-url-and-cause-canary');
-    return Response.json(url.includes('/actions/runs/') ? ci : { object: { sha: current } }, { status });
+    return Response.json(url.includes('/jobs?') ? jobs : url.includes('/actions/runs/') ? ci : { object: { sha: current } }, { status });
   } };
 }
 let mock = transport();
@@ -46,9 +46,45 @@ for (const options of [{ current: 'b'.repeat(40) }, { status: 403 }, { failure: 
 }
 await assert.rejects(verifyCurrentSource(candidate, { fetcher: transport().fetcher }));
 
+const pushInput = {
+  eventName: 'push', event: { repository: { full_name: repository }, head_commit: { id: sourceSha }, deleted: false },
+  ref: 'refs/heads/production-foundation-20261019', sourceSha,
+  verifiedJobEnabled: 'true', verifyResult: 'success', runId: '12345', runAttempt: '2',
+};
+const verifiedCandidate = selectDeployment(pushInput);
+assert.equal(verifiedCandidate.mode, 'verified_job');
+assert.equal(verifiedCandidate.runId, 12345);
+for (const patch of [{ verifiedJobEnabled: undefined }, { verifiedJobEnabled: 'false' }, { verifyResult: 'failure' }, { verifyResult: true }, { runId: '../bad' }, { runAttempt: '0' }, { ref: 'refs/pull/1/merge' }, { sourceSha: 'b'.repeat(40) }, { eventName: 'pull_request' }]) assert.throws(() => selectDeployment({ ...pushInput, ...patch }));
+assert.throws(() => selectDeployment({ ...pushInput, event: { ...pushInput.event, deleted: true } }));
+assert.throws(() => selectDeployment({ ...pushInput, event: { ...pushInput.event, repository: { full_name: 'outsider/fork' } } }));
+const runningRun = { ...run, status: 'in_progress', conclusion: null, run_attempt: 2 };
+// GitHub's documented job schema does not require run_attempt; the endpoint is attempt-specific.
+const verifyJob = { id: 777, run_id: 12345, head_sha: sourceSha, name: 'verify', status: 'completed', conclusion: 'success' };
+const jobResponse = { total_count: 2, jobs: [verifyJob, { name: 'deploy-review / deploy', status: 'in_progress' }] };
+mock = transport({ ci: runningRun, jobs: jobResponse });
+await verifyCurrentSource(verifiedCandidate, { token: 'private-test-token', fetcher: mock.fetcher });
+assert.equal(mock.calls.length, 3);
+assert(mock.calls[1].endsWith('/actions/runs/12345/attempts/2/jobs?per_page=100'));
+for (const options of [
+  { ci: { ...runningRun, event: 'pull_request' } }, { ci: { ...runningRun, run_attempt: 1 } },
+  { ci: { ...runningRun, head_sha: 'b'.repeat(40) } }, { ci: { ...runningRun, name: 'Forged caller' } },
+  { ci: { ...runningRun, path: '.github/workflows/other.yml' } },
+  { ci: { ...runningRun, status: 'completed', conclusion: 'cancelled' } },
+  { jobs: { total_count: 0, jobs: [] } }, { jobs: { total_count: 101, jobs: [verifyJob] } },
+  { jobs: { total_count: 2, jobs: [verifyJob, verifyJob] } },
+  ...[{ conclusion: 'failure' }, { conclusion: 'skipped' }, { status: 'in_progress', conclusion: null }, { head_sha: 'b'.repeat(40) }, { run_id: 12346 }, { run_attempt: 1 }, { name: 'verify-other' }].map(patch => ({ jobs: { total_count: 1, jobs: [{ ...verifyJob, ...patch }] } })),
+  { current: 'b'.repeat(40) },
+]) {
+  mock = transport({ ci: runningRun, jobs: jobResponse, ...options });
+  await assert.rejects(verifyCurrentSource(verifiedCandidate, { token: 'private-test-token', fetcher: mock.fetcher }));
+}
+
 const workflow = readFileSync(new URL('./github-workflows/site-cloudflare.yml', import.meta.url), 'utf8');
 assert(workflow.includes('  workflow_run:'));
 for (const required of ["workflows: ['Shared CMS checks']", 'types: [completed]', "github.event.workflow_run.event == 'push'", "github.event.workflow_run.conclusion == 'success'", 'github.event.workflow_run.head_repository.full_name == github.repository', "vars.DERECH_CF_AUTO_DEPLOY_ENABLED == 'true'", 'github.event.workflow_run.head_sha || github.sha', 'WORKERS_CI_COMMIT_SHA:', 'persist-credentials: false', 'environment: derech-cloudflare-review', 'cancel-in-progress: false', 'actions: read']) assert(workflow.includes(required), required);
+assert(workflow.includes('  workflow_call:'));
+assert(workflow.includes("inputs.verify_result == 'success'"));
+assert(workflow.includes("vars.DERECH_CF_VERIFIED_JOB_DEPLOY_ENABLED == 'true'"));
 assert.equal((workflow.match(/node (?:\.\.\/)?production\/cloudflare-cd-policy\.mjs/g) ?? []).length, 3, 'guard before build and each provider mutation');
 assert(workflow.indexOf('node production/cloudflare-cd-policy.mjs') < workflow.indexOf('node scripts/build-cloudflare.mjs'));
 assert(workflow.lastIndexOf('node production/cloudflare-cd-policy.mjs') < workflow.indexOf('npx wrangler d1 migrations apply'));
@@ -58,4 +94,6 @@ assert(!/uses:.*(?:download-artifact|\/main\b|@v\d)/.test(workflow), 'pinned act
 const ci = readFileSync(new URL('./github-workflows/site-ci.yml', import.meta.url), 'utf8');
 assert(ci.includes('run: node production/test-cloudflare-cd-policy.mjs'), 'ordinary CI must require deployment policy tests');
 assert(ci.indexOf('actions/setup-node@') < ci.indexOf('run: node production/test-cloudflare-cd-policy.mjs'));
-console.log('Cloudflare review CD policy passed: tested SHA, trusted successful push CI only, disabled flag, fork/PR/branch denial, source skeleton/stale commit refusal, protected serialized deployment.');
+for (const required of ['  deploy-review:', 'needs: verify', "needs.verify.result == 'success'", 'uses: ./.github/workflows/site-cloudflare.yml', 'verify_result: ${{ needs.verify.result }}', "vars.DERECH_CF_VERIFIED_JOB_DEPLOY_ENABLED == 'true'", "cancel-in-progress: ${{ !(github.event_name == 'push' && vars.DERECH_CF_VERIFIED_JOB_DEPLOY_ENABLED == 'true') }}", 'actions: read']) assert(ci.includes(required), required);
+assert(!ci.includes('secrets: inherit'));
+console.log('Cloudflare review CD policy passed: exact SHA, same-run successful verify job/attempt API proof, legacy successful push-only gate, default-disabled flags, fork/PR/stale denial and protected non-cancelling deployment.');

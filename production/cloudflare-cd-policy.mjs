@@ -9,20 +9,29 @@ const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const sha = value => typeof value === 'string' && /^[a-f0-9]{40}$/.test(value);
 const blocked = code => { throw new Error(`Cloudflare review deployment blocked: ${code}`); };
 
-function trustedRun(run) {
+function trustedRun(run, allowRunning = false) {
   return run?.name === 'Shared CMS checks' && run.event === 'push' &&
-    run.status === 'completed' && run.conclusion === 'success' &&
+    ((run.status === 'completed' && run.conclusion === 'success') ||
+      (allowRunning && run.status === 'in_progress' && run.conclusion === null)) &&
     run.head_repository?.full_name === repository && branches.has(run.head_branch) &&
     run.path === '.github/workflows/site-ci.yml' && sha(run.head_sha) &&
     Number.isSafeInteger(run.id) && run.id > 0;
 }
 
-export function selectDeployment({ eventName, event, ref, sourceSha, autoEnabled }) {
+export function selectDeployment({ eventName, event, ref, sourceSha, autoEnabled, verifiedJobEnabled, verifyResult, runId, runAttempt }) {
   if (event?.repository?.full_name !== repository) blocked('repository');
   if (eventName === 'workflow_dispatch') {
     const branch = typeof ref === 'string' && ref.startsWith('refs/heads/') ? ref.slice(11) : '';
     if (!branches.has(branch) || !sha(sourceSha)) blocked('manual_source');
     return { repository, branch, sha: sourceSha, mode: 'manual' };
+  }
+  if (eventName === 'push') {
+    const branch = typeof ref === 'string' && ref.startsWith('refs/heads/') ? ref.slice(11) : '';
+    const id = Number(runId), attempt = Number(runAttempt);
+    if (verifiedJobEnabled !== 'true' || verifyResult !== 'success' || !branches.has(branch) || !sha(sourceSha) ||
+      event.deleted !== false || event.head_commit?.id !== sourceSha ||
+      !Number.isSafeInteger(id) || id <= 0 || !Number.isSafeInteger(attempt) || attempt <= 0) blocked('untrusted_verified_job_event');
+    return { repository, branch, sha: sourceSha, mode: 'verified_job', runId: id, runAttempt: attempt };
   }
   if (eventName !== 'workflow_run' || autoEnabled !== 'true' || event.action !== 'completed' || !trustedRun(event.workflow_run)) blocked('untrusted_ci_event');
   const run = event.workflow_run;
@@ -37,7 +46,7 @@ export function checkApplicationSource(candidate, { head, exists = path => exist
 }
 
 export async function verifyCurrentSource(candidate, { token, fetcher = fetch } = {}) {
-  if (!token || candidate.repository !== repository || !branches.has(candidate.branch) || !sha(candidate.sha)) blocked('verification_inputs');
+  if (!token || candidate.repository !== repository || !branches.has(candidate.branch) || !sha(candidate.sha) || !['manual', 'automatic', 'verified_job'].includes(candidate.mode)) blocked('verification_inputs');
   async function get(path) {
     let response;
     try {
@@ -49,9 +58,18 @@ export async function verifyCurrentSource(candidate, { token, fetcher = fetch } 
       return await response.json();
     } catch { blocked('github_read_failed'); }
   }
-  if (candidate.mode === 'automatic') {
+  if (candidate.mode === 'automatic' || candidate.mode === 'verified_job') {
     const run = await get(`actions/runs/${candidate.runId}`);
-    if (!trustedRun(run) || run.id !== candidate.runId || run.head_sha !== candidate.sha || run.head_branch !== candidate.branch || run.repository?.full_name !== repository) blocked('ci_readback_mismatch');
+    if (!trustedRun(run, candidate.mode === 'verified_job') || run.id !== candidate.runId || run.head_sha !== candidate.sha || run.head_branch !== candidate.branch || run.repository?.full_name !== repository) blocked('ci_readback_mismatch');
+    if (candidate.mode === 'verified_job') {
+      if (run.run_attempt !== candidate.runAttempt) blocked('ci_attempt_mismatch');
+      const result = await get(`actions/runs/${candidate.runId}/attempts/${candidate.runAttempt}/jobs?per_page=100`);
+      if (!Number.isSafeInteger(result.total_count) || result.total_count < 1 || result.total_count > 100 || !Array.isArray(result.jobs) || result.jobs.length !== result.total_count) blocked('ci_jobs_unavailable');
+      const verified = result.jobs.filter(job => job.name === 'verify');
+      if (verified.length !== 1 || verified[0].run_id !== candidate.runId || verified[0].head_sha !== candidate.sha ||
+        verified[0].status !== 'completed' || verified[0].conclusion !== 'success' ||
+        (verified[0].run_attempt !== undefined && verified[0].run_attempt !== candidate.runAttempt)) blocked('verify_job_not_successful');
+    }
   }
   const current = await get(`git/ref/heads/${encodeURIComponent(candidate.branch)}`);
   if (current.object?.sha !== candidate.sha) blocked('superseded_source');
@@ -64,6 +82,9 @@ async function main() {
     event: JSON.parse(readFileSync(environment.GITHUB_EVENT_PATH, 'utf8')),
     ref: environment.GITHUB_REF, sourceSha: environment.GITHUB_SHA,
     autoEnabled: environment.DERECH_CF_AUTO_DEPLOY_ENABLED,
+    verifiedJobEnabled: environment.DERECH_CF_VERIFIED_JOB_DEPLOY_ENABLED,
+    verifyResult: environment.DERECH_CI_VERIFY_RESULT,
+    runId: environment.GITHUB_RUN_ID, runAttempt: environment.GITHUB_RUN_ATTEMPT,
   });
   if (candidate.sha !== environment.WORKERS_CI_COMMIT_SHA || candidate.branch !== environment.DERECH_DEPLOY_BRANCH) blocked('build_identity');
   checkApplicationSource(candidate, { head: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8', cwd: repositoryRoot }).trim() });

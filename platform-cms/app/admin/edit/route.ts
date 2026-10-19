@@ -16,7 +16,9 @@ export async function GET(request: Request) {
     const row = await getPageRow(slug);
     const draft = row ? JSON.parse(row.draft_json) : emptyDraft(base);
     let html = await applyPublishedCollections(await renderDocument(base, draft),slug);
-    const script = '<script src="/editor.js" defer></script>';
+    // The captured link-transition handler can run before editor.js consumes a
+    // selection click. Keep that navigation overlay from locking the editor.
+    const script = '<style id="cms-editor-navigation-guard">#global-page-loader{display:none!important}html.global-loader-active,body.global-loader-active{overflow:auto!important}</style><script src="/editor.js" defer></script>';
     html = /<\/body\s*>/i.test(html) ? html.replace(/<\/body\s*>/i, `${script}</body>`) : `${html}${script}`;
     return new Response(html, { headers: {
       "content-type": "text/html; charset=utf-8", "cache-control": "no-store",

@@ -2,6 +2,11 @@
 name: Deploy Cloudflare review
 on:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      verify_result:
+        required: true
+        type: string
   workflow_run:
     workflows: ['Shared CMS checks']
     types: [completed]
@@ -18,6 +23,10 @@ jobs:
     if: >-
       (github.event_name == 'workflow_dispatch' &&
        (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/production-foundation-20261019')) ||
+      (github.event_name == 'push' && vars.DERECH_CF_VERIFIED_JOB_DEPLOY_ENABLED == 'true' &&
+       inputs.verify_result == 'success' && github.repository == 'YardenRimon/derech-tkuma-journeys' &&
+       github.event.repository.full_name == github.repository &&
+       (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/production-foundation-20261019')) ||
       (github.event_name == 'workflow_run' && vars.DERECH_CF_AUTO_DEPLOY_ENABLED == 'true' &&
        github.event.workflow_run.name == 'Shared CMS checks' &&
        github.event.workflow_run.event == 'push' && github.event.workflow_run.status == 'completed' &&
@@ -32,6 +41,8 @@ jobs:
       WORKERS_CI_COMMIT_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
       DERECH_DEPLOY_BRANCH: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name }}
       DERECH_CF_AUTO_DEPLOY_ENABLED: ${{ vars.DERECH_CF_AUTO_DEPLOY_ENABLED }}
+      DERECH_CF_VERIFIED_JOB_DEPLOY_ENABLED: ${{ vars.DERECH_CF_VERIFIED_JOB_DEPLOY_ENABLED }}
+      DERECH_CI_VERIFY_RESULT: ${{ inputs.verify_result }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:

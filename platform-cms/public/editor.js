@@ -2,9 +2,6 @@
   if (window.parent === window) return;
   const style = document.createElement("style");
   style.textContent = `
-    /* Source link transitions run before editor selection consumes the click. */
-    #global-page-loader { display: none !important; }
-    html.global-loader-active, body.global-loader-active { overflow: auto !important; }
     html:not(.cms-editor-preview) [data-edit-id], html:not(.cms-editor-preview) [data-image-id] { cursor: pointer !important; }
     html:not(.cms-editor-preview) [data-edit-id]:hover, html:not(.cms-editor-preview) [data-image-id]:hover { outline: 2px dashed #0b86ad !important; outline-offset: 3px !important; }
     html:not(.cms-editor-preview) .cms-selected { outline: 3px solid #057ea7 !important; outline-offset: 4px !important; }
