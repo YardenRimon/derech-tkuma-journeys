@@ -22,7 +22,10 @@ export type AccessFailureStage =
   | "token_missing" | "config_invalid" | "token_invalid" | "claims_invalid"
   | "time_invalid" | "jwks_fetch_failed" | "jwks_schema_invalid"
   | "key_missing" | "key_policy_invalid" | "key_import_failed" | "signature_invalid";
-type VerifyOptions = { fetcher?: typeof fetch; now?: () => number; onFailure?: (stage: AccessFailureStage) => void };
+export type AccessJwksProbe =
+  | { event: "jwks_response"; status: number; redirected: boolean }
+  | { event: "jwks_network_failure"; kind: "timeout" | "network" };
+type VerifyOptions = { fetcher?: typeof fetch; now?: () => number; onFailure?: (stage: AccessFailureStage) => void; onJwksProbe?: (probe: AccessJwksProbe) => void };
 
 // Explicit opt-in, review only. No raw request, token, claim or error is accepted by a logger.
 export const ACCESS_DIAGNOSTIC_SCOPE_HEADER = "x-derech-internal-access-diagnostic";
@@ -44,6 +47,17 @@ export function reportAccessFailure(stage: AccessFailureStage): void {
 export function reportAccessHeaderPresence(location: "worker" | "app", assertionPresent: boolean): void {
   if ((location !== "worker" && location !== "app") || typeof assertionPresent !== "boolean") return;
   try { console.warn("derech_access_diagnostic", { event: "header_presence", location, assertionPresent }); } catch { /* Logging cannot affect authentication. */ }
+}
+export function reportAccessJwksProbe(probe: AccessJwksProbe): void {
+  if (!probe || typeof probe !== "object") return;
+  // Reconstruct the closed schema; caller-added fields are never serialized.
+  try {
+    if (probe.event === "jwks_response" && Number.isInteger(probe.status) && probe.status >= 100 && probe.status <= 599 && typeof probe.redirected === "boolean") {
+      console.warn("derech_access_diagnostic", { event: "jwks_response", status: probe.status, redirected: probe.redirected });
+    } else if (probe.event === "jwks_network_failure" && (probe.kind === "timeout" || probe.kind === "network")) {
+      console.warn("derech_access_diagnostic", { event: "jwks_network_failure", kind: probe.kind });
+    }
+  } catch { /* Diagnostics cannot affect authentication. */ }
 }
 
 const MAX_TOKEN_BYTES = 16_384;
@@ -104,11 +118,11 @@ export async function verifyAccessIdentity(
     const fetcher = options.fetcher ?? fetch;
     const fetchedAt = options.now?.() ?? Date.now();
     const previouslyCached = jwksCache.get(issuer);
-    let keys = await getJwks(issuer, fetcher, fetchedAt, false, () => { stage = "jwks_schema_invalid"; });
+    let keys = await getJwks(issuer, fetcher, fetchedAt, false, () => { stage = "jwks_schema_invalid"; }, options.onJwksProbe);
     let key = keys.find((item) => item.kid === header.kid);
     if (!key && previouslyCached && previouslyCached.expiresAt > fetchedAt && canRefreshUnknownKid(issuer, fetchedAt)) {
       stage = "jwks_fetch_failed";
-      keys = await getJwks(issuer, fetcher, fetchedAt, true, () => { stage = "jwks_schema_invalid"; });
+      keys = await getJwks(issuer, fetcher, fetchedAt, true, () => { stage = "jwks_schema_invalid"; }, options.onJwksProbe);
       key = keys.find((item) => item.kid === header.kid);
     }
     if (!key) return fail("key_missing");
@@ -189,16 +203,23 @@ function parseJsonPart(value: string): unknown {
   return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
 }
 
-async function getJwks(issuer: string, fetcher: typeof fetch, now: number, refresh = false, onSchema?: () => void): Promise<AccessKey[]> {
+async function getJwks(issuer: string, fetcher: typeof fetch, now: number, refresh = false, onSchema?: () => void, onProbe?: (probe: AccessJwksProbe) => void): Promise<AccessKey[]> {
   const cached = jwksCache.get(issuer);
   if (!refresh && cached && cached.expiresAt > now) return cached.keys;
 
-  const response = await fetcher(`${issuer}/cdn-cgi/access/certs`, {
-    method: "GET",
-    redirect: "error",
-    signal: AbortSignal.timeout(3_000),
-    headers: { accept: "application/json" },
-  });
+  const observe = (probe: AccessJwksProbe) => { try { onProbe?.(probe); } catch { /* Observation failures never affect authentication. */ } };
+  const signal = AbortSignal.timeout(3_000);
+  let response: Response;
+  try {
+    response = await fetcher(`${issuer}/cdn-cgi/access/certs`, {
+      method: "GET", redirect: "error", signal,
+      headers: { accept: "application/json", "user-agent": "DerechCMSAccessVerifier/1.0" },
+    });
+  } catch {
+    observe({ event: "jwks_network_failure", kind: signal.aborted ? "timeout" : "network" });
+    throw new Error("JWKS unavailable");
+  }
+  observe({ event: "jwks_response", status: response.status, redirected: response.redirected });
   if (!response.ok || response.redirected) throw new Error("JWKS unavailable");
   onSchema?.();
   const text = await readBounded(response, MAX_JWKS_BYTES);

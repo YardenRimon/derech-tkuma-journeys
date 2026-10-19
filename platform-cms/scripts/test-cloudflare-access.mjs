@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { verifyAccessIdentity, accessDiagnosticsEnabled, accessDiagnosticPath, reportAccessFailure, reportAccessHeaderPresence } from "../lib/cloudflare-access.ts";
+import { verifyAccessIdentity, accessDiagnosticsEnabled, accessDiagnosticPath, reportAccessFailure, reportAccessHeaderPresence, reportAccessJwksProbe } from "../lib/cloudflare-access.ts";
 
 const issuer = "https://team-review.cloudflareaccess.com";
 const audience = "test-access-audience";
@@ -33,6 +33,7 @@ const fetcher = async (input, init) => {
   assert.equal(String(input), `${issuer}/cdn-cgi/access/certs`);
   assert.equal(init.redirect, "error");
   assert.ok(init.signal);
+  assert.equal(init.headers["user-agent"], "DerechCMSAccessVerifier/1.0");
   return Response.json({ keys: [publicJwk] });
 };
 
@@ -191,12 +192,54 @@ assert.ok(await verifyAccessIdentity(validToken, { issuer, audience }, { now: ()
 const absentOpsIssuer = "https://diagnostic-absent-key-ops.cloudflareaccess.com";
 const absentOps = { ...publicJwk }; delete absentOps.key_ops;
 assert.ok(await verifyAccessIdentity(await token({ iss: absentOpsIssuer }), { issuer: absentOpsIssuer, audience }, { now: () => now, fetcher: async () => Response.json({ keys: [absentOps] }) }), "provider JWK without key_ops remains valid");
+const probeCases = [
+  { response: new Response(secretCanary, { status: 403 }), expected: { event: "jwks_response", status: 403, redirected: false } },
+  { response: new Response(secretCanary, { status: 502 }), expected: { event: "jwks_response", status: 502, redirected: false } },
+  { fetcher: async () => { throw new Error(secretCanary); }, expected: { event: "jwks_network_failure", kind: "network" } },
+];
+const redirectedJwks = Response.json({ keys: [publicJwk] });
+Object.defineProperty(redirectedJwks, "redirected", { value: true });
+probeCases.push({ response: redirectedJwks, expected: { event: "jwks_response", status: 200, redirected: true } });
+for (const [index, scenario] of probeCases.entries()) {
+  const probeIssuer = `https://probe-${index}.cloudflareaccess.com`, probes = [], failures = [];
+  assert.equal(await verifyAccessIdentity(await token({ iss: probeIssuer }), { issuer: probeIssuer, audience }, {
+    now: () => now, fetcher: scenario.fetcher ?? (async () => scenario.response),
+    onJwksProbe: (...args) => probes.push(args), onFailure: stage => failures.push(stage),
+  }), null);
+  assert.deepEqual(probes, [[scenario.expected]]);
+  assert.deepEqual(failures, ["jwks_fetch_failed"]);
+  assert.equal(JSON.stringify(probes).includes(secretCanary), false);
+}
+const nativeTimeout = AbortSignal.timeout;
+try {
+  let deadline;
+  AbortSignal.timeout = milliseconds => { deadline = milliseconds; return AbortSignal.abort(); };
+  const probeIssuer = "https://probe-timeout.cloudflareaccess.com", probes = [];
+  assert.equal(await verifyAccessIdentity(await token({ iss: probeIssuer }), { issuer: probeIssuer, audience }, {
+    now: () => now, fetcher: async () => { throw new Error(secretCanary); }, onJwksProbe: probe => probes.push(probe),
+  }), null);
+  assert.equal(deadline, 3000, "existing fetch deadline remains exactly three seconds");
+  assert.deepEqual(probes, [{ event: "jwks_network_failure", kind: "timeout" }]);
+} finally { AbortSignal.timeout = nativeTimeout; }
+const callbackIssuer = "https://probe-callback-isolation.cloudflareaccess.com";
+assert.ok(await verifyAccessIdentity(await token({ iss: callbackIssuer }), { issuer: callbackIssuer, audience }, {
+  now: () => now, fetcher: async () => Response.json({ keys: [publicJwk] }),
+  onJwksProbe: () => { throw new Error(secretCanary); },
+}), "probe callback failure cannot reject a valid signature");
 const originalWarn = console.warn, logs = [];
 try {
   console.warn = (...args) => logs.push(args);
   reportAccessFailure("jwks_fetch_failed");
   reportAccessHeaderPresence("worker", true);
   reportAccessHeaderPresence("app", false);
+  reportAccessJwksProbe({ event: "jwks_response", status: 403, redirected: false, body: secretCanary, url: secretCanary });
+  reportAccessJwksProbe({ event: "jwks_network_failure", kind: "timeout", error: secretCanary });
+  reportAccessJwksProbe({ event: secretCanary, status: 403, redirected: false });
+  reportAccessJwksProbe({ event: "jwks_response", status: secretCanary, redirected: false });
+  reportAccessJwksProbe({ event: "jwks_response", status: 600, redirected: false });
+  reportAccessJwksProbe({ event: "jwks_response", status: 200.5, redirected: false });
+  reportAccessJwksProbe({ event: "jwks_response", status: 200, redirected: secretCanary });
+  reportAccessJwksProbe({ event: "jwks_network_failure", kind: secretCanary });
   reportAccessFailure(secretCanary);
   reportAccessHeaderPresence(secretCanary, true);
   reportAccessHeaderPresence("app", secretCanary);
@@ -204,10 +247,13 @@ try {
     ["derech_access_diagnostic", { event: "verification_failed", stage: "jwks_fetch_failed" }],
     ["derech_access_diagnostic", { event: "header_presence", location: "worker", assertionPresent: true }],
     ["derech_access_diagnostic", { event: "header_presence", location: "app", assertionPresent: false }],
+    ["derech_access_diagnostic", { event: "jwks_response", status: 403, redirected: false }],
+    ["derech_access_diagnostic", { event: "jwks_network_failure", kind: "timeout" }],
   ]);
   assert.equal(JSON.stringify(logs).includes(secretCanary), false);
   console.warn = () => { throw new Error(secretCanary); };
   assert.doesNotThrow(() => reportAccessFailure("token_missing"));
   assert.doesNotThrow(() => reportAccessHeaderPresence("app", false));
+  assert.doesNotThrow(() => reportAccessJwksProbe({ event: "jwks_response", status: 200, redirected: false }));
 } finally { console.warn = originalWarn; }
 console.log("Cloudflare Access JWT checks passed (crypto, unchanged claim rejection, bounded cache, fixed diagnostics, redaction and callback isolation).");
