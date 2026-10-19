@@ -1,0 +1,7 @@
+.env
+site/
+*.tar.gz
+*.sql
+*.sqlite*
+secrets/
+receipts/

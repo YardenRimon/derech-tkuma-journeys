@@ -1,0 +1,37 @@
+name: Site foundation checks
+on:
+  pull_request:
+    paths: ['production/**', '.github/workflows/site-*.yml']
+  push:
+    branches: [main, production-foundation-20261019]
+    paths: ['production/**', '.github/workflows/site-*.yml']
+permissions:
+  contents: read
+concurrency:
+  group: site-ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Verify public export boundaries
+        run: python3 -m unittest discover -s production -p 'test_*.py'
+      - name: Verify SEO draft source and origin boundaries
+        run: python3 -m unittest discover -s production/seo -p 'test_*.py'
+      - name: Lint WordPress content and staging boundaries
+        run: |
+          set -a
+          . production/image-lock.env
+          set +a
+          docker pull "$WORDPRESS_IMAGE"
+          for source in production/wordpress/wp-content/mu-plugins/*.php; do
+            docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --entrypoint php -v "$PWD/$source:/source.php:ro" "$WORDPRESS_IMAGE" -l /source.php
+          done
+          docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --entrypoint php -v "$PWD/production/wordpress:/source:ro" "$WORDPRESS_IMAGE" /source/tests/content-boundaries.php
+      - name: Verify deployment descriptors
+        run: |
+          docker compose --env-file production/image-lock.env -f production/compose.yaml config --quiet
