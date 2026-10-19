@@ -86,6 +86,12 @@
       return;
     }
     const definition = state.base.fields[id];
+    if(state.managedFields?.[id]){
+      const managed=state.managedFields[id];
+      const note=document.createElement('p');note.textContent='השדה מנוהל עם נתוני הסיור והמועד: '+managed.label;
+      const link=document.createElement('a');link.href='/admin/collections?kind='+encodeURIComponent(managed.kind)+'&id='+encodeURIComponent(managed.id);link.textContent='עריכת הסיור או המועד';
+      panel.append(note,link);return;
+    }
     const current = entry(id);
     const detail = definition.type === "text"
       ? current.value.replace(/\s+/g, " ").trim().slice(0, 70) || "הטקסט שנבחר"
@@ -253,6 +259,7 @@
       }
       state.slug = result.slug;
       state.base = result.base;
+      state.managedFields=result.managedFields||{};
       state.draft = result.draft;
       state.draft.fields ||= {};
       state.draft.order ||= result.base.sections.map((section) => section.id);

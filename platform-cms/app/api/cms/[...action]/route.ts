@@ -1,9 +1,10 @@
 import {
   CmsError, asRevision, emptyDraft, getBasePage, getBucket,
   getD1, getPageRow, jsonError, listPages, normalizeSlug, renderDocument,
-  requireSameOrigin, validateDraft, type Draft,
+  requireSameOrigin, validateDraft, editablePageDraft, type Draft,
 } from "@/lib/cms";
 import { authorizeCmsUser } from "@/lib/access";
+import { managedCollectionFields } from "@/lib/collection-projection";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
@@ -36,8 +37,8 @@ export async function GET(request: Request) {
     const base = getBasePage(slug);
     const row = await getPageRow(slug);
     if (route === "page") {
-      return noStore({ slug, title: base.title, pages: listPages(), base,
-        draft: row ? JSON.parse(row.draft_json) : emptyDraft(base),
+      return noStore({ slug, title: base.title, pages: listPages(), base, managedFields:managedCollectionFields(slug),
+        draft: row ? editablePageDraft(base,JSON.parse(row.draft_json)) : emptyDraft(base),
         revision: row?.revision ?? 0, publishedVersion: row?.published_version ?? 0,
         updatedAt: row?.updated_at ?? null,
         permissions: { role: user.role, canPublish: user.canPublish } });

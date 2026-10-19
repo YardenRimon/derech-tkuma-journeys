@@ -12,9 +12,3 @@ lib/generated-pages.json
 !.dev.vars.example
 
 node_modules
-
-# Public media stay in the existing Sites source; verify pinned asset manifest before a release.
-/public/_external/
-/public/_optimized/
-/public/wp-content/
-/public/wp-includes/

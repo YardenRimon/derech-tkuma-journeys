@@ -32,6 +32,21 @@ jobs:
       - name: Check types and content/access/isolation contracts
         working-directory: platform-cms
         run: npm run check && npm test
+      - name: Verify real local HTTP lifecycle and public projections
+        working-directory: platform-cms
+        run: |
+          npm run setup:local
+          npm run dev > /tmp/derech-cms-ci.log 2>&1 &
+          cms_pid=$!
+          trap 'kill "$cms_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 40); do
+            if curl --silent --fail http://127.0.0.1:5174/ > /dev/null; then break; fi
+            sleep 1
+          done
+          npm run test:http
+          npm run test:admin-http
+          npm run test:tasks-http
+          node scripts/test-current-collections-http.mjs
       - name: Build shared CMS
         working-directory: platform-cms
         run: npm run build

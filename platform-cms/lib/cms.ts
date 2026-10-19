@@ -1,6 +1,11 @@
 import { env } from "cloudflare:workers";
 import { CmsError, assertIsolatedD1Scope } from "@/lib/access";
 import generatedPages from "@/lib/generated-pages.json";
+import { managedCollectionFields, projectPublishedCollections } from "@/lib/collection-projection";
+import { D1Collections } from "@/lib/collection-d1";
+import { siteScope } from "@/lib/site-scope";
+import visualResources from "@/lib/visual-resource-map.json";
+import { prepareReviewRuntime } from "@/lib/review-runtime";
 
 export { CmsError } from "@/lib/access";
 
@@ -8,7 +13,7 @@ export type Field = { type: "text" | "image"; value: string; alt?: string };
 export type BasePage = {
   slug?: string;
   title: string;
-  description?: string;
+  description?: string | null;
   page: string;
   sections: { id: string; html: string }[];
   fields: Record<string, Field>;
@@ -49,9 +54,9 @@ export function normalizeSlug(value: string): string {
 }
 
 export function getBasePage(slug: string): BasePage {
-  const page = pages[normalizeSlug(slug)];
+  const normalized=normalizeSlug(slug), page = pages[normalized];
   if (!page) throw new CmsError(404, "העמוד לא נמצא");
-  return page;
+  return {...page,slug:normalized};
 }
 
 export function listPages() {
@@ -60,6 +65,11 @@ export function listPages() {
 
 export function emptyDraft(base: BasePage): Draft {
   return { fields: {}, order: base.sections.map((section) => section.id) };
+}
+
+export function editablePageDraft(base:BasePage,draft:Draft):Draft{
+ const managed=managedCollectionFields(base.slug??'/');
+ return {...draft,fields:Object.fromEntries(Object.entries(draft.fields).filter(([id])=>!managed[id]))};
 }
 
 function bindingEnv() {
@@ -92,8 +102,10 @@ export async function getPageRow(slug: string): Promise<PageRow | null> {
 export async function validateDraft(base: BasePage, input: unknown): Promise<Draft> {
   if (!input || typeof input !== "object" || Array.isArray(input)) throw new CmsError(400, "טיוטה לא תקינה");
   const candidate = input as Partial<Draft>;
+  const managed=managedCollectionFields(base.slug??'/');
   if (!candidate.fields || typeof candidate.fields !== "object" || Array.isArray(candidate.fields)) throw new CmsError(400, "שדות הטיוטה אינם תקינים");
   if (!Array.isArray(candidate.order)) throw new CmsError(400, "סדר המקטעים אינו תקין");
+  if(Object.keys(candidate.fields).some(id=>managed[id]))throw new CmsError(400,'שדות סיורים ומועדים נערכים במסך סיורים ומועדים');
   const ids = base.sections.map((section) => section.id);
   if (candidate.order.length !== ids.length || new Set(candidate.order).size !== ids.length || candidate.order.some((id) => !ids.includes(id))) {
     throw new CmsError(400, "סדר המקטעים חייב לכלול כל מקטע פעם אחת");
@@ -135,13 +147,16 @@ export async function validateDraft(base: BasePage, input: unknown): Promise<Dra
 }
 
 export async function renderDocument(base: BasePage, draft: Draft): Promise<string> {
+  // Historical page versions may predate typed collection ownership. Preserve
+  // their audit JSON but never let those old field overrides compete publicly.
+  draft=editablePageDraft(base,draft);
   const sections = new Map(base.sections.map((section) => [section.id, section.html]));
   const html = base.shellPrefix + draft.order.map((id) => {
     const section = sections.get(id);
     if (section === undefined) throw new CmsError(400, "מקטע לא מוכר");
     return section;
   }).join("") + base.shellSuffix;
-  if (!draft.seo && Object.keys(draft.fields).length === 0) return html;
+  if (!draft.seo && Object.keys(draft.fields).length === 0) return localizeVisualResources(html);
   const rewriter = new HTMLRewriter()
     .on("head > title", { element(element) {
       if (draft.seo) element.setInnerContent(draft.seo.title, { html: false });
@@ -175,21 +190,39 @@ export async function renderDocument(base: BasePage, draft: Draft): Promise<stri
         if (edit.alt !== undefined) element.setAttribute("alt", edit.alt);
       }
     } });
-  return rewriter.transform(new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } })).text();
+  return localizeVisualResources(await rewriter.transform(new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } })).text());
+}
+
+function localizeVisualResources(html:string):string{
+ html=prepareReviewRuntime(html);
+ // Only exact proven static resources, never general external links, canonical or schema identities.
+ for(const [url,path]of Object.entries(visualResources)){
+  const local=encodeURI(path);
+  html=html.split(url).join(local).split(url.replaceAll('/','\\/')).join(local.replaceAll('/','\\/'));
+ }
+ return html;
 }
 
 export async function getPublishedPage(slug: string): Promise<string> {
   const normalized = normalizeSlug(slug);
   const base = getBasePage(normalized);
   const row = await getPageRow(normalized);
-  if (!row?.published_html) return renderDocument(base, emptyDraft(base));
+  if (!row?.published_html) return applyPublishedCollections(await renderDocument(base, emptyDraft(base)),normalized);
   // Use the published revision, never the current (possibly unpublished) draft.
   // Re-render it with the deployed template so code releases update public pages.
   const published = await getD1().prepare(
     "SELECT draft_json FROM cms_versions WHERE slug = ? AND version = ?",
   ).bind(normalized, row.published_version).first<{ draft_json: string }>();
-  if (!published) return row.published_html;
-  return renderDocument(base, JSON.parse(published.draft_json) as Draft);
+  if (!published) return applyPublishedCollections(row.published_html,normalized);
+  return applyPublishedCollections(await renderDocument(base, JSON.parse(published.draft_json) as Draft),normalized);
+}
+
+export async function applyPublishedCollections(html:string,slug:string):Promise<string>{
+ if(!Object.keys(managedCollectionFields(slug)).length)return html;
+ const store=new D1Collections(getD1()),scope=siteScope();
+ // Lists include explicit withdrawals. Projection never reads their draft values.
+ const rows=(await Promise.all([store.list(scope,'tour'),store.list(scope,'occurrence')])).flat();
+ return projectPublishedCollections(html,slug,rows);
 }
 
 export function jsonError(error: unknown): Response {

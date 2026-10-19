@@ -1,5 +1,5 @@
 import { chatGPTSignInPath, getChatGPTUser } from "@/app/chatgpt-auth";
-import { CmsError, emptyDraft, getBasePage, getPageRow, renderDocument } from "@/lib/cms";
+import { CmsError, emptyDraft, getBasePage, getPageRow, renderDocument, applyPublishedCollections } from "@/lib/cms";
 import { authorizeCmsUser } from "@/lib/access";
 
 export const runtime = "edge";
@@ -15,7 +15,7 @@ export async function GET(request: Request) {
     const base = getBasePage(slug);
     const row = await getPageRow(slug);
     const draft = row ? JSON.parse(row.draft_json) : emptyDraft(base);
-    let html = await renderDocument(base, draft);
+    let html = await applyPublishedCollections(await renderDocument(base, draft),slug);
     const script = '<script src="/editor.js" defer></script>';
     html = /<\/body\s*>/i.test(html) ? html.replace(/<\/body\s*>/i, `${script}</body>`) : `${html}${script}`;
     return new Response(html, { headers: {

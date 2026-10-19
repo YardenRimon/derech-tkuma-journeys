@@ -33,7 +33,7 @@ export default async function AdminPage() {
       <link rel="stylesheet" href="/admin.css" />
       <header className="admin-header">
         <div><strong>עריכת אתר דרך התקומה</strong><span> מחובר: {email} · {role === "system_admin" ? "מנהל מערכת" : "עורך תוכן"}</span></div>
-        <nav aria-label="ניהול האתר"><a href="/admin/collections">סיורים ומועדים</a>{role === "system_admin" && <a href="/admin/users">משתמשים והרשאות</a>}<a id="logout" href={chatGPTSignOutPath("/")}>התנתקות</a></nav>
+        <nav aria-label="ניהול האתר"><a href="/admin/collections">סיורים ומועדים</a><a href="/admin/tasks">שאלות ומשימות</a>{role === "system_admin" && <a href="/admin/users">משתמשים והרשאות</a>}<a id="logout" href={chatGPTSignOutPath("/")}>התנתקות</a></nav>
       </header>
       <div className="admin-toolbar">
         <label htmlFor="page-picker">עמוד</label>

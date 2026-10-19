@@ -2,8 +2,8 @@
 export type Scope = Readonly<{ tenantId: string; siteId: string }>;
 export type Kind = "tour" | "occurrence";
 export type Actor = { id: string; canPublish: boolean };
-export type Tour = { title: string; slug: string; description: string; image: string; imageAlt: string };
-export type Occurrence = { tourId: string; startsAt: string; endsAt: string; timezone: string; meetingPoint: string; priceMinor: number; currency: "ILS"; capacity: number };
+export type Tour = { title: string; slug: string; sourcePath?: string; description: string; image: string; imageAlt: string };
+export type Occurrence = { tourId: string; title?: string; date: string; dateLabel: string; startsAt: string|null; endsAt: string|null; timezone: string; meetingPoint: string; priceMinor: number; currency: "ILS"; capacity: number|null; note?: string };
 export type Content = Tour | Occurrence;
 export type Record = Scope & { id: string; kind: Kind; revision: number; draft: Content | null; published: Content | null; publishedVersion: number; updatedAt: string; updatedBy: string };
 export type Change = { operation: "save" | "delete" | "publish" | "restore"; expectedRevision: number; content?: unknown; version?: number };
@@ -31,23 +31,33 @@ export function kindOf(x: unknown): Kind {
   if (x !== "tour" && x !== "occurrence") throw new CollectionError(404, "סוג תוכן אינו מוכר");
   return x;
 }
+export function sourcePath(value: unknown): string {
+ const path=text(value,500);
+ let decoded;try{decoded=decodeURIComponent(path);}catch{throw new CollectionError(400,"כתובת המקור אינה תקינה");}
+ if(!path.startsWith('/')||path.startsWith('//')||/[?#\\\s<>"']/.test(decoded)||decoded.includes('//')||decoded.split('/').some(x=>x==='.'||x==='..'))throw new CollectionError(400,"כתובת המקור חייבת להיות נתיב מקומי");
+ return path;
+}
 export function validateContent(kind: Kind, input: unknown): Content {
   if (!input || typeof input !== "object" || Array.isArray(input)) throw new CollectionError(400, "תוכן אינו תקין");
   const x = input as { [key: string]: unknown };
+  const allowed=kind==='tour'?['title','slug','sourcePath','description','image','imageAlt']:['tourId','title','date','dateLabel','startsAt','endsAt','timezone','meetingPoint','priceMinor','currency','capacity','note'];
+  if(Object.keys(x).some(key=>!allowed.includes(key)))throw new CollectionError(400,"שדה תוכן אינו מוכר");
   if (kind === "tour") {
     const slug = text(x.slug, 160);
     if (!/^[\p{L}\p{N}-]+$/u.test(slug)) throw new CollectionError(400, "כתובת סיור אינה תקינה");
     const image = text(x.image, 2000, false);
     if (image && (!image.startsWith("/") || image.startsWith("//") || /[\s<>"']/.test(image))) throw new CollectionError(400, "כתובת תמונה אינה תקינה");
-    return { title: text(x.title, 160), slug, description: text(x.description, 10000, false), image, imageAlt: text(x.imageAlt, 500, false) };
+    return { title: text(x.title, 160), slug, ...(x.sourcePath===undefined?{}:{sourcePath:sourcePath(x.sourcePath)}), description: text(x.description, 10000, false), image, imageAlt: text(x.imageAlt, 500, false) };
   }
-  const startsAt = text(x.startsAt, 40), endsAt = text(x.endsAt, 40), timezone = text(x.timezone, 80);
+  const startsAt = x.startsAt==null||x.startsAt===''?null:text(x.startsAt, 40), endsAt = x.endsAt==null||x.endsAt===''?null:text(x.endsAt, 40), timezone = text(x.timezone, 80);
   const instant = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{3})?)?(?:Z|[+-]\d{2}:\d{2})$/;
-  if (!instant.test(startsAt) || !instant.test(endsAt) || !Number.isFinite(Date.parse(startsAt)) || !Number.isFinite(Date.parse(endsAt)) || Date.parse(endsAt) <= Date.parse(startsAt)) throw new CollectionError(400, "זמני המועד אינם תקינים");
+  if (!!startsAt!==!!endsAt || (startsAt&&endsAt&&(!instant.test(startsAt)||!instant.test(endsAt)||!Number.isFinite(Date.parse(startsAt))||!Number.isFinite(Date.parse(endsAt))||Date.parse(endsAt)<=Date.parse(startsAt)))) throw new CollectionError(400, "יש למלא זוג זמני התחלה וסיום תקינים, או להשאיר את שניהם לא ידועים");
+  const date=text(x.date??startsAt?.slice(0,10),10);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(Date.parse(date))||new Date(date).toISOString().slice(0,10)!==date||(startsAt&&!startsAt.startsWith(date+'T')))throw new CollectionError(400,"תאריך המועד אינו תקין");
   try { new Intl.DateTimeFormat("he", { timeZone: timezone }); } catch { throw new CollectionError(400, "אזור זמן אינו תקין"); }
-  const priceMinor = x.priceMinor as number, capacity = x.capacity as number;
-  if (!Number.isSafeInteger(priceMinor) || priceMinor < 0 || priceMinor > 100000000 || x.currency !== "ILS" || !Number.isSafeInteger(capacity) || capacity < 1 || capacity > 100000) throw new CollectionError(400, "מחיר או קיבולת אינם תקינים");
-  return { tourId: resourceId(x.tourId), startsAt, endsAt, timezone, meetingPoint: text(x.meetingPoint, 1000), priceMinor, currency: "ILS", capacity };
+  const priceMinor = x.priceMinor as number, capacity = x.capacity as number|null;
+  if (!Number.isSafeInteger(priceMinor) || priceMinor < 0 || priceMinor > 100000000 || x.currency !== "ILS" || (capacity!==null&&(!Number.isSafeInteger(capacity)||capacity<1||capacity>100000))) throw new CollectionError(400, "מחיר או קיבולת אינם תקינים");
+  return { tourId: resourceId(x.tourId), ...(x.title===undefined?{}:{title:text(x.title,160)}), date, dateLabel:text(x.dateLabel??date,100), startsAt, endsAt, timezone, meetingPoint: text(x.meetingPoint, 1000,false), priceMinor, currency: "ILS", capacity, ...(x.note===undefined?{}:{note:text(x.note,1000,false)}) };
 }
 export class Collections {
   store: CollectionStore;

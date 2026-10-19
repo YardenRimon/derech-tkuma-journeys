@@ -67,3 +67,22 @@ export const cmsRecordHistory = sqliteTable("cms_record_history", {
 export const cmsDeploymentScope = sqliteTable("cms_deployment_scope", {
  singleton: integer("singleton").primaryKey(), tenantId: text("tenant_id").notNull(), siteId: text("site_id").notNull(),
 }, table => [check("cms_deployment_scope_singleton",sql`${table.singleton}=1`)]);
+
+// Projection of authoritative platform work_items + durable unsynchronized commands.
+export const cmsTaskMirrors = sqliteTable("cms_task_mirrors", {
+ tenantId: text("tenant_id").notNull(), siteId: text("site_id").notNull(), externalId: text("external_id").notNull(),
+ recordJson: text("record_json").notNull(), assigneeEmail: text("assignee_email").notNull(), revision: integer("revision").notNull(),
+ syncedAt: text("synced_at").notNull(), operationToken: text("operation_token").notNull(),
+}, table=>[primaryKey({columns:[table.tenantId,table.siteId,table.externalId]})]);
+export const cmsTaskCommands = sqliteTable("cms_task_commands", {
+ tenantId: text("tenant_id").notNull(), siteId: text("site_id").notNull(), externalId: text("external_id").notNull(),
+ commandKey: text("command_key").notNull(), commandJson: text("command_json").notNull(),
+ state: text("state",{enum:["pending","accepted","rejected"]}).notNull(), resultNote: text("result_note").notNull(), createdAt: text("created_at").notNull(),
+}, table=>[primaryKey({columns:[table.tenantId,table.siteId,table.commandKey]}),
+ foreignKey({columns:[table.tenantId,table.siteId,table.externalId],foreignColumns:[cmsTaskMirrors.tenantId,cmsTaskMirrors.siteId,cmsTaskMirrors.externalId]}),
+ check("cms_task_commands_state",sql`${table.state} IN ('pending','accepted','rejected')`)]);
+export const cmsTaskAudit = sqliteTable("cms_task_audit", {
+ tenantId: text("tenant_id").notNull(), siteId: text("site_id").notNull(), externalId: text("external_id").notNull(),
+ revision: integer("revision").notNull(), auditJson: text("audit_json").notNull(),
+}, table=>[primaryKey({columns:[table.tenantId,table.siteId,table.externalId,table.revision]}),
+ foreignKey({columns:[table.tenantId,table.siteId,table.externalId],foreignColumns:[cmsTaskMirrors.tenantId,cmsTaskMirrors.siteId,cmsTaskMirrors.externalId]})]);

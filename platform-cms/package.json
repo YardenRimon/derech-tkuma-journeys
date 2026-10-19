@@ -9,13 +9,14 @@
     "dev": "python3 scripts/prepare-pages.py && node --import ./scripts/sites-env.mjs ./node_modules/vinext/dist/cli.js dev --port 5174",
     "build": "python3 scripts/prepare-pages.py && node --import ./scripts/sites-env.mjs ./node_modules/vinext/dist/cli.js build",
     "check": "python3 scripts/prepare-pages.py && tsc --noEmit",
-    "test": "python3 scripts/prepare-pages.py && node --experimental-strip-types scripts/test-collections.mjs && node --experimental-strip-types scripts/test-collection-d1.mjs && node scripts/test-pages.mjs && node --experimental-strip-types scripts/test-cloudflare-access.mjs",
+    "test": "python3 scripts/prepare-pages.py && node --experimental-strip-types scripts/test-collections.mjs && node --experimental-strip-types scripts/test-collection-d1.mjs && node scripts/test-pages.mjs && node --experimental-strip-types scripts/test-cloudflare-access.mjs && node --experimental-strip-types scripts/test-tasks.mjs && node --experimental-strip-types scripts/test-current-collections.mjs",
     "prepare:pages": "python3 scripts/prepare-pages.py",
     "test:access": "node --experimental-strip-types scripts/test-cloudflare-access.mjs",
     "setup:local": "node scripts/setup-local.mjs",
     "test:http": "node scripts/test-http.mjs",
     "test:admin-http": "node scripts/test-admin-bootstrap-http.mjs",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "test:tasks-http": "node scripts/test-tasks-http.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
