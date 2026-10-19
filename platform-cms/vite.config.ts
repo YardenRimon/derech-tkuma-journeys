@@ -5,7 +5,7 @@ export default defineConfig(async () => {
   const { cloudflare } = await import("@cloudflare/vite-plugin");
   return {
     define: { __PLATFORM_AUTH_PROVIDER__: JSON.stringify("sites") },
-    server: { watch: { useFsEvents: false, usePolling: true } },
+    server: { host:'127.0.0.1', watch: { useFsEvents: false, usePolling: true } },
     plugins: [vinext(), sites({mockAuth:true}), cloudflare({
       viteEnvironment: { name: "rsc", childEnvironments: ["ssr"] }, inspectorPort:false,
       config: { main:"./build/sites-worker.ts", compatibility_date:"2026-05-15", compatibility_flags:["nodejs_compat"],

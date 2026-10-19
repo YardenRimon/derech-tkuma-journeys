@@ -36,13 +36,16 @@ jobs:
         working-directory: platform-cms
         run: |
           npm run setup:local
-          npm run dev > /tmp/derech-cms-ci.log 2>&1 &
+          SITES_PERMISSIONS_TEST=1 npm run dev > /tmp/derech-cms-ci.log 2>&1 &
           cms_pid=$!
-          trap 'kill "$cms_pid" 2>/dev/null || true' EXIT
+          trap 'result=$?; kill "$cms_pid" 2>/dev/null || true; if [ "$result" -ne 0 ]; then tail -n 100 /tmp/derech-cms-ci.log; fi' EXIT
+          ready=0
           for attempt in $(seq 1 40); do
-            if curl --silent --fail http://127.0.0.1:5174/ > /dev/null; then break; fi
+            if curl --silent --fail http://127.0.0.1:5174/ > /dev/null; then ready=1; break; fi
+            if ! kill -0 "$cms_pid" 2>/dev/null; then break; fi
             sleep 1
           done
+          test "$ready" -eq 1
           npm run test:http
           npm run test:admin-http
           npm run test:tasks-http
