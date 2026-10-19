@@ -1,4 +1,5 @@
 import handler from 'vinext/server/fetch-handler';
+import {serveCloudflareBuildAsset} from './cloudflare-assets.mjs';
 import {accessDiagnosticsEnabled,accessDiagnosticPath,ACCESS_DIAGNOSTIC_SCOPE_HEADER,reportAccessHeaderPresence} from '../lib/cloudflare-access';
 export default {
  async fetch(request:Request,env:Cloudflare.Env,ctx:ExecutionContext){
@@ -13,7 +14,7 @@ export default {
   }
   const response=config.PLATFORM_RELEASE_STAGE!=='review'||!config.CF_ACCESS_ISSUER||!config.CF_ACCESS_AUDIENCE
    ?new Response('Review identity configuration unavailable',{status:503})
-   :await handler.fetch(new Request(request,{headers}),env,ctx);
+   :await serveCloudflareBuildAsset(new Request(request,{headers}),env as Cloudflare.Env & {ASSETS?:{fetch:(request:Request)=>Promise<Response>}})??await handler.fetch(new Request(request,{headers}),env,ctx);
   const result=new Response(response.body,response);result.headers.set('x-robots-tag','noindex, nofollow');
   if(/^[a-f0-9]{40}$/.test(config.PLATFORM_RELEASE_SHA??''))result.headers.set('x-derech-release',config.PLATFORM_RELEASE_SHA!);
   return result;

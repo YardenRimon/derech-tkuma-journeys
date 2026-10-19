@@ -24,3 +24,4 @@ assert(workflow.includes('  workflow_dispatch:'));if(/^  push:/m.test(workflow))
 }
 
 await import('./test-cloudflare-live.mjs');
+await import('./test-cloudflare-assets.mjs');
