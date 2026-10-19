@@ -394,5 +394,16 @@
     "textFields": 104,
     "imageFields": 177,
     "scriptBodiesPreservedExceptOwnSiteUrlsAndDisabledReviewIntegrations": true
+  },
+  "/thanks/": {
+    "source": "thanks/index.html",
+    "fixture": "current-3c750b005b4e7f294a20.html.gz",
+    "sha256": "c67915f0a3a44ca8c0bc1c935bd5f2ac693dc51b4458a782e42e4b250af92e0d",
+    "sourceSha256": "6eb2b9880e488bed43ec618d5334c59e4c90c01e511a264831476c0f90bbf1ab",
+    "sourceUrl": "https://derech-tkuma.com/thanks/",
+    "canonical": null,
+    "textFields": 113,
+    "imageFields": 199,
+    "scriptBodiesPreservedExceptOwnSiteUrlsAndDisabledReviewIntegrations": true
   }
 }

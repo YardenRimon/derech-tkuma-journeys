@@ -26,6 +26,9 @@ jobs:
       - name: Install locked application dependencies
         working-directory: platform-cms
         run: npm ci --no-audit --no-fund
+      - name: Verify pinned build against full source reconstruction
+        working-directory: platform-cms
+        run: npm run prepare:pages:verify
       - name: Prepare exact public source templates
         working-directory: platform-cms
         run: npm run prepare:pages

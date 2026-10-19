@@ -6,11 +6,13 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "dev": "python3 scripts/prepare-pages.py && node --import ./scripts/sites-env.mjs ./node_modules/vinext/dist/cli.js dev --port 5174",
-    "build": "python3 scripts/prepare-pages.py && node --import ./scripts/sites-env.mjs ./node_modules/vinext/dist/cli.js build",
-    "check": "python3 scripts/prepare-pages.py && tsc --noEmit",
-    "test": "python3 scripts/prepare-pages.py && node --experimental-strip-types scripts/test-collections.mjs && node --experimental-strip-types scripts/test-collection-d1.mjs && node scripts/test-pages.mjs && node --experimental-strip-types scripts/test-cloudflare-access.mjs && node --experimental-strip-types scripts/test-tasks.mjs && node --experimental-strip-types scripts/test-current-collections.mjs",
-    "prepare:pages": "python3 scripts/prepare-pages.py",
+    "dev": "node scripts/prepare-pages.mjs && node --import ./scripts/sites-env.mjs ./node_modules/vinext/dist/cli.js dev --port 5174",
+    "build": "node scripts/prepare-pages.mjs && node --import ./scripts/sites-env.mjs ./node_modules/vinext/dist/cli.js build",
+    "check": "node scripts/prepare-pages.mjs && tsc --noEmit",
+    "test": "node scripts/prepare-pages.mjs && node --experimental-strip-types scripts/test-collections.mjs && node --experimental-strip-types scripts/test-collection-d1.mjs && node scripts/test-pages.mjs && node --experimental-strip-types scripts/test-cloudflare-access.mjs && node --experimental-strip-types scripts/test-tasks.mjs && node --experimental-strip-types scripts/test-current-collections.mjs && node --experimental-strip-types scripts/test-execution.mjs && node --experimental-strip-types scripts/test-reports.mjs",
+    "prepare:pages": "node scripts/prepare-pages.mjs",
+    "prepare:pages:verify": "python3 scripts/prepare-pages.py --verify-build",
+    "prepare:pages:refresh": "python3 scripts/prepare-pages.py",
     "test:access": "node --experimental-strip-types scripts/test-cloudflare-access.mjs",
     "setup:local": "node scripts/setup-local.mjs",
     "test:http": "node scripts/test-http.mjs",

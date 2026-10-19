@@ -663,6 +663,11 @@
       "sha256": "897e61de5de807fba80bc0f7a05af6fcc1def14cc96e9413207d0fb8d9e11abb"
     },
     {
+      "path": "execution-admin.js",
+      "bytes": 814,
+      "sha256": "6e621aa338d7145f009e2952876858481bc79bcb7a97088ab099af298bf9bf28"
+    },
+    {
       "path": "robots.txt",
       "bytes": 88,
       "sha256": "c68a021f617ff31af59a8514409fa5d63bf594bde6afb4bf165622d7489ac751"
@@ -1023,6 +1028,11 @@
       "sha256": "dad3795cefb3d9f5dc2cb4a6e621043322cc94cd90170f28f25b8a0c3eda7633"
     },
     {
+      "path": "wp-content/plugins/elementor/assets/lib/animations/styles/e-animation-shrink.min.css",
+      "bytes": 205,
+      "sha256": "20fda6d38f6419cc5cebc66862a0dec0c7caa34a332d500e1d2d63518ee936cd"
+    },
+    {
       "path": "wp-content/plugins/elementor/assets/lib/animations/styles/fadeIn.min.css",
       "bytes": 77,
       "sha256": "d9c370831c74b1850d70f5b1c99453d6cda21e5099428a3f21c43bd96c3acb5d"
@@ -1076,6 +1086,11 @@
       "path": "wp-content/plugins/elementor/assets/mask-shapes/circle.svg",
       "bytes": 100,
       "sha256": "858dfbc156b518a6f068804978133a5b4c8f63d743cc7eb7adc671683c503231"
+    },
+    {
+      "path": "wp-content/plugins/elementor-pro/assets/css/conditionals/popup.min.css",
+      "bytes": 995,
+      "sha256": "3e86e49c78cd2befb9c7e7b27ee263298290728f7489b17077f00c25e37a5838"
     },
     {
       "path": "wp-content/plugins/elementor-pro/assets/css/conditionals/transitions.min.css",
@@ -4746,6 +4761,21 @@
       "path": "wp-content/uploads/2026/08/Gemini_Generated_Image_gmhgrygmhgrygmhg-1-1-1.png",
       "bytes": 496108,
       "sha256": "7e169546e7624c7570c8d1516d78354bd146d2c0c1a1f0265e492b293984db3e"
+    },
+    {
+      "path": "wp-content/uploads/2026/09/WhatsApp-Image-2026-09-20-at-07.27.19-1.jpeg",
+      "bytes": 146949,
+      "sha256": "d7ca76a5f1e309fafbb62dd9ece1b131ad61e7c2ee80cd0b70804177ca58bf70"
+    },
+    {
+      "path": "wp-content/uploads/2026/09/WhatsApp-Image-2026-09-20-at-07.27.19-2.jpeg",
+      "bytes": 57544,
+      "sha256": "2e6657773e6ce3788225d53ecf054a3c41a4f38eeb896c6840daf82c7219cb41"
+    },
+    {
+      "path": "wp-content/uploads/2026/09/WhatsApp-Image-2026-09-20-at-07.27.19.jpeg",
+      "bytes": 118996,
+      "sha256": "94e0e2a619f3f9881673659cba29c715ae19e08bbaa5d6d04c414ac0fd61580f"
     },
     {
       "path": "wp-content/uploads/2026/09/סיור-קבוצתי-1-1-300x225.png",

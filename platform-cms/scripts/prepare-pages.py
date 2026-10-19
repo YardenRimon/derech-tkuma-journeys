@@ -136,8 +136,21 @@ def build():
   pages[slug]={'title':unescape(title.group(1)) if title else slug,'description':record.get('description',''),'page':relative,'sections':[{'id':'source-body','html':annotated[body_start.end():body_end.start()]}],'fields':fields,'shellPrefix':annotated[:body_start.end()],'shellSuffix':annotated[body_end.start():]}
   record.update(reviewSha256=sha(transformed),textFields=sum(f['type']=='text' for f in fields.values()),imageFields=sum(f['type']=='image' for f in fields.values()),patches=patches,sourceTextValuesSha256=sha(json.dumps([x['value'] for x in raw_fields.values() if x['type']=='text'],ensure_ascii=False,separators=(',',':'))),sourceImageValuesSha256=sha(json.dumps([x['value'] for x in raw_fields.values() if x['type']=='image'],ensure_ascii=False,separators=(',',':'))))
   manifest[slug]={'source':relative,'fixture':record['fixture'],'sha256':sha(transformed),'sourceSha256':record['sourceSha256'],'sourceUrl':record['sourceUrl'],'canonical':record['canonical'],'textFields':record['textFields'],'imageFields':record['imageFields'],'scriptBodiesPreservedExceptOwnSiteUrlsAndDisabledReviewIntegrations':True}
- (ROOT/'lib/generated-pages.json').write_text(json.dumps(pages,ensure_ascii=False,separators=(',',':'))+'\n')
+ payload=(json.dumps(pages,ensure_ascii=False,separators=(',',':'))+'\n').encode('utf-8')
+ # Python 3.11/3.12 can inherit zlib's OS byte for mtime=0, while newer
+ # versions use 255. Normalize it so macOS/Linux CI share the same header.
+ packed=bytearray(gzip.compress(payload,mtime=0));packed[9]=255;packed=bytes(packed)
+ build_manifest={'version':1,'format':'gzip-json-utf8','routeCount':len(pages),'payloadSha256':sha(payload),'payloadBytes':len(payload),'packedSha256':sha(packed),'sources':{slug:{'fixture':record['fixture'],'sourceSha256':record['sourceSha256'],'fixtureSha256':sha((FIXTURES/record['fixture']).read_bytes())}for slug,record in provenance['pages'].items()}}
+ if '--verify-build' in sys.argv:
+  if (FIXTURES/'generated-review-pages.json.gz').read_bytes()!=packed:raise ValueError('pinned review build differs from full source reconstruction; refresh with prepare-pages.py')
+  if json.loads((FIXTURES/'review-build.json').read_text())!=build_manifest:raise ValueError('pinned review build identity differs from current source fixtures')
+  if json.loads((ROOT/'source-manifest.json').read_text())!=manifest:raise ValueError('source manifest differs from reconstruction')
+  if json.loads(PROVENANCE.read_text())!=provenance:raise ValueError('source provenance differs from reconstruction')
+  print(json.dumps({'verified':True,'routeCount':len(pages),'payloadSha256':sha(payload),'sourceReconstruction':'full Python parser and byte-offset provenance; no files written'}));return
+ (ROOT/'lib/generated-pages.json').write_bytes(payload)
  (ROOT/'source-manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n')
  PROVENANCE.write_text(json.dumps(provenance,ensure_ascii=False,indent=2)+'\n')
+ (FIXTURES/'generated-review-pages.json.gz').write_bytes(packed)
+ (FIXTURES/'review-build.json').write_text(json.dumps(build_manifest,ensure_ascii=False,indent=2)+'\n')
  print(json.dumps({'logicalPages':len(pages),'sourceHtmlCaptures':provenance['capturedHtmlCount'],'aliases':len(provenance['aliases']),'textFields':sum(x['textFields'] for x in manifest.values()),'imageFields':sum(x['imageFields'] for x in manifest.values()),'source':'pinned current gzip fixtures','networkRequests':0,'rawSourcesCopiedToPublic':0}))
 if __name__=='__main__':build()

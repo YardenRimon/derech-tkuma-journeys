@@ -11,8 +11,8 @@ const scriptBlocks=html=>[...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script
 const tracking=/googletagmanager|google-analytics|google-analytics-for-wordpress|monsterinsights|__gtagTracker|GoogleAnalyticsObject|\bgtag\s*\(|\bfbq\s*\(|fbevents|hotjar|clarity\.ms|maspik-signals|pixel\./i;
 const payment=/meshulam[_-]payment|configureGrowSdk|\bGrowSDK\b|grow-sdk|grow\.payments/i;
 const canonical=html=>[...html.matchAll(/<link\b[^>]*>/gi)].filter(m=>/\brel\s*=\s*["']canonical["']/i.test(m[0])).map(m=>m[0]);
-assert.equal(Object.keys(pages).length,36,'all current logical routes must be present');
-assert.equal(provenance.capturedHtmlCount,37);assert.equal(provenance.aliases.length,1);assert.equal(provenance.logicalPageCount,36);
+assert.equal(Object.keys(pages).length,37,'all current logical routes must be present');
+assert.equal(provenance.capturedHtmlCount,38);assert.equal(provenance.aliases.length,1);assert.equal(provenance.logicalPageCount,37);
 assert.deepEqual(Object.keys(pages).sort(),Object.keys(provenance.pages).sort());assert.deepEqual(Object.keys(pages).sort(),Object.keys(manifest).sort());
 const inventoryUrl=new URL('../../migration/source-2026-10-19/inventory.json',import.meta.url);
 let inventory;
