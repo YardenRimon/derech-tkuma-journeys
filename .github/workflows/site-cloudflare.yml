@@ -1,0 +1,85 @@
+# Prepared review deployment. Install under .github/workflows only with the protected environment configured.
+name: Deploy Cloudflare review
+on:
+  workflow_dispatch:
+  # Enable only after real Access config and the first verified manual deployment:
+  # push:
+  #   branches: [main]
+  #   paths: ['platform-cms/**', 'production/**', 'scripts/cms-backup-*.py', '.github/workflows/site-cloudflare.yml']
+permissions:
+  contents: read
+concurrency:
+  group: derech-cloudflare-review
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/production-foundation-20261019') && (github.event_name == 'workflow_dispatch' || vars.DERECH_CF_AUTO_DEPLOY_ENABLED == 'true')
+    environment: derech-cloudflare-review
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: platform-cms/package-lock.json
+      - name: Install locked dependencies
+        working-directory: platform-cms
+        run: npm ci --no-audit --no-fund
+      - name: Materialize non-secret reviewed configuration
+        env:
+          CF_CONFIG_JSON: ${{ vars.DERECH_CF_CONFIG_JSON }}
+        run: |
+          test -n "$CF_CONFIG_JSON"
+          printf '%s\n' "$CF_CONFIG_JSON" > "$RUNNER_TEMP/derech-cloudflare.json"
+          node --input-type=module -e 'import fs from "node:fs";import path from "node:path";const p=process.env.RUNNER_TEMP+"/derech-cloudflare.json",c=JSON.parse(fs.readFileSync(p));c.d1_databases[0].migrations_dir=path.resolve("platform-cms/drizzle");fs.writeFileSync(p,JSON.stringify(c));' 
+      - name: Hydrate pinned public media
+        env:
+          MEDIA_URL: ${{ vars.DERECH_MEDIA_ARCHIVE_URL }}
+          MEDIA_SHA256: ${{ vars.DERECH_MEDIA_ARCHIVE_SHA256 }}
+        run: |
+          test -n "$MEDIA_URL" && test -n "$MEDIA_SHA256"
+          case "$MEDIA_URL" in https://*) ;; *) exit 1 ;; esac
+          curl --fail --silent --show-error --proto '=https' --proto-redir '=https' --location --max-redirs 2 "$MEDIA_URL" -o "$RUNNER_TEMP/derech-media.tgz"
+          python3 platform-cms/scripts/hydrate-cloudflare-media.py --archive "$RUNNER_TEMP/derech-media.tgz" --sha256 "$MEDIA_SHA256" --root platform-cms
+      - name: Verify full source reconstruction and tested standalone build
+        working-directory: platform-cms
+        env:
+          PLATFORM_CF_CONFIG_PATH: ${{ runner.temp }}/derech-cloudflare.json
+        run: |
+          node scripts/build-cloudflare.mjs
+      - name: Refuse a superseded queued source commit
+        env:
+          GH_READ_TOKEN: ${{ github.token }}
+        run: |
+          node --input-type=module - <<'JS'
+          const {GITHUB_REPOSITORY:repo,GITHUB_REF_NAME:branch,GITHUB_SHA:expected,GH_READ_TOKEN:token}=process.env;
+          if (!['main','production-foundation-20261019'].includes(branch)) throw new Error('Unapproved deployment branch');
+          const response=await fetch(`https://api.github.com/repos/${repo}/git/ref/heads/${encodeURIComponent(branch)}`,{redirect:'error',headers:{authorization:`Bearer ${token}`,accept:'application/vnd.github+json','x-github-api-version':'2022-11-28'},signal:AbortSignal.timeout(15000)});
+          if (!response.ok) throw new Error('Cannot verify current source branch');
+          if ((await response.json()).object?.sha!==expected) throw new Error('This deployment source was superseded; use the newer run');
+          JS
+      - name: Apply schema-only migrations to isolated review DB
+        working-directory: platform-cms
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN" && test -n "$CLOUDFLARE_ACCOUNT_ID"
+          node scripts/validate-cloudflare-artifact.mjs "$RUNNER_TEMP/derech-cloudflare.json"
+          npx wrangler d1 migrations apply DB --remote --config "$RUNNER_TEMP/derech-cloudflare.json"
+      - name: Deploy checked artifact and verify source identity/noindex
+        working-directory: platform-cms
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          node scripts/validate-cloudflare-artifact.mjs "$RUNNER_TEMP/derech-cloudflare.json"
+          npx wrangler deploy --config dist/server/wrangler.json
+          node scripts/verify-cloudflare-live.mjs "$RUNNER_TEMP/derech-cloudflare.json"
+      - name: Remove temporary build configuration/media
+        if: always()
+        run: rm -f "$RUNNER_TEMP/derech-cloudflare.json" "$RUNNER_TEMP/derech-media.tgz"
