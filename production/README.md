@@ -1,32 +1,11 @@
-# דרך התקומה — תשתית האתר החדש
+# Derech Hatkuma - site foundation
 
-19.10.2026. **סביבת הכנה מבודדת; אין עדיין קבלת אתר סופי או החלפת דומיין.**
+19 October 2026. The CMS target is `platform-cms/`, reusing the reviewed Gvanim page, user, media and version implementation with typed tours and occurrences. The separate WordPress experiment was stopped before initialization; files and volumes remain, and no WordPress administrator/password was created.
 
-התצוגה נשענת על ההעתק הקיים כדי לשמור את העיצוב. WordPress מבודד משמש CMS מוכר לניהול סיורים, מועדים, תוכן ומדיה; התצוגה יכולה לצרוך REST מצומצם של רשומות שפורסמו. זה בסיס למימוש הדרישה החדשה ל־CMS, ולא שחזור האתר המקורי או החלטה שההגירה כבר התקבלה. אין שכפול בסיס נתוני לקוחות, העתקת מפתחות מהמקור או טפסי תשלום בדמו.
+The current migration contains three guarded source pages, with noindex and blocked forms, payments and external measurement. This is a migration review environment, not acceptance of the full website. Preserve the existing Sites project identity. The isolated D1/R2 adapter is an interim reuse of the proven Gvanim adapter; the decided unified SaaS/Postgres/RLS architecture remains the systemic target and is not represented as already deployed.
 
-## תצורה
+`seo/` reads only the new CMS's two public collection projections and prepares internal proposals without publication. Weekly performance uses the existing server producer, schedule and Telegram sender.
 
-- Compose נפרד `derech-site-staging`; מסד ברשת פנימית, CMS ב־127.0.0.1:8783 ותצוגה ב־127.0.0.1:8782. ללא שינוי בבוטים ובתורי הלקוחות.
-- תמונות רשמיות מוצמדות ל־digest לאחר פתרון על ARM64. אין תג `latest` בריצה או שדרוג אוטומטי. מגבלות משאבים לכל שירות.
-- סודות נוצרים רק בשרת ב־`/etc/derech-site/secrets`, ולא במאגר, בארכיון או בפלט.
-- התצוגה לקריאה בלבד; מנהל CMS אינו נגיש דרך התצוגה. הפרדה בין תוכן שפורסם לבין טיוטות, nonces והרשאות WordPress.
-- סביבת ההכנה חוסמת מייל, HTTP יוצא של WordPress ואינדוקס. הטפסים/סליקה בדמו נשארים חסומים. חיבור חיצוני מופעל רק אחרי בדיקת היעד והרשאת המקור שלו.
+GitHub CI validates the application and adapters. Sites publication uses its existing source/version mechanism. A durable GitHub merge-to-Sites deployment hook does not exist yet; Gvanim has the same boundary. CI success and a manual deployment do not establish CD. A stable provider target and scoped deployment authority remain necessary for CD acceptance.
 
-## פריסה ובדיקות
-
-`verify.py` בודק את כל הבתים מול מניפסט, מונע נתיבים חיצוניים וקבצי שרת/סודות, ומוודא noindex. אין לשנות את יצוא הדמו ללא עדכון מניפסט ובדיקה. `image-lock.env` מכיל digests בלבד ונוצר מה־registry הרשמי.
-
-צינור GitHub: בדיקות קוד ותצורה ב־PR; פריסה באמצעות סוד SSH תחום ו־known_hosts מאומת בסביבת GitHub ייעודית. פריסת staging דורשת ארכיון מתועד ומניפסט תואם; production דורש בנוסף קבלת העברה. המערכת אינה מקבלת פקודות או כתובת שרת מתוך קלט ציבורי. אין לפתוח runner עם הרשאות root על שרת הבוטים.
-
-## השלמות לפני אתר סופי
-
-1. מלאי כלל עמודי האתר, הפניות ו־URL, קבלה חזותית/התנהגותית במחשב ובטלפון. הדמו כרגע מכסה רק שלושה עמודים.
-2. גיבוי מלא חיצוני של קבצים ומסד המקור ושחזור מבודד; מיפוי תוכן CMS והוכחת מעבר ועריכה מתוך CMS לתצוגה.
-3. כתובת HTTPS ל־staging ול־CMS, DNS ותעודה, הרשאות עורך/מנהל מתאימות; שמירת סודות ודרך חזרה לגרסה הקודמת.
-4. מייל: זהות שולח ארגונית, ספק קיים, SPF/DKIM/DMARC, טופס ניסוי ומסירה מאומתת. אין להמציא ספק או לקנות שירות.
-5. WhatsApp: שימור המספר המאומת וקישור תקין; API אוטומטי דורש נכס והרשאה נפרדים. אין להסיק הרשאת API מקיום WhatsApp Business.
-6. Grow: לקוח/pageCode, סביבת בדיקה, כתובות server-side, התאמה ל־transactionCode/סכום/מטבע, אימות מול הספק ו־idempotency. דף תודה אינו אישור תשלום. אין חיוב אמיתי לצורך קבלה זו.
-7. מדידה: לשמר את נכס GA4 505868691 ואת GTM-5N7NPTL4 הקיים אחרי אימות הרשאה, Pixel ו־Consent. להפריד קליק WhatsApp, פנייה שהתקבלה ורכישה מאומתת; אין לפרסם מזהי מדידה משוערים או להפעיל מדידה כפולה בדמו.
-8. לחבר מתאם CMS לצינור SEO הקיים, תחילה טיוטות, diffs וקריאה חוזרת; metadata/canonical/sitemap/301 עם שימור כתובות. פרסום ושינוי טכני אינם תוצאה עסקית.
-
-מקורות: [WordPress image](https://hub.docker.com/_/wordpress), [WordPress REST](https://developer.wordpress.org/rest-api/), [Grow standard payments](https://developers.grow.business/reference/regular-payment-overview), [Grow webhooks](https://developers.grow.business/docs/webhooks), [GitHub environments](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments).
+Before replacing the original domain: obtain and restore a full source backup; migrate all URLs/content; connect typed records to public tour cards; confirm dates/prices; verify mail, WhatsApp and Grow; verify measurement assets and consent; check redirects/canonical/sitemap, backup/restore and desktop/mobile behavior. See `INTEGRATIONS.md`.

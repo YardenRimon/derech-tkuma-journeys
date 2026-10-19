@@ -1,0 +1,26 @@
+{
+  "/": {
+    "source": "index.html",
+    "fixture": "home.html.gz",
+    "sha256": "f0224c34dea300fea692b4925f0918bf3db055e54a10e72c3b3d1db7926ff80b",
+    "textFields": 232,
+    "imageFields": 245,
+    "scriptBodiesPreserved": true
+  },
+  "/סיורים/": {
+    "source": "סיורים/index.html",
+    "fixture": "tours.html.gz",
+    "sha256": "15d0f6964a100480f5b4810094de8c3eb69d617f9753824388c56949603fd5b9",
+    "textFields": 166,
+    "imageFields": 142,
+    "scriptBodiesPreserved": true
+  },
+  "/maslulim/עוז-מול-תופת/": {
+    "source": "maslulim/עוז-מול-תופת/index.html",
+    "fixture": "oz-mul-tofet.html.gz",
+    "sha256": "e4e31863bb606c013191c19dd2f276d424f9dfd2a4b55e6430ba6cfa78c92f0d",
+    "textFields": 140,
+    "imageFields": 128,
+    "scriptBodiesPreserved": true
+  }
+}

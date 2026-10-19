@@ -18,14 +18,13 @@ from datetime import datetime, timezone
 from html import unescape
 
 SCHEMA = "derech-new-site-seo-drafts/v1"
-PATHS = ("/api/content/tours", "/api/content/occurrences")
+PATHS = ("/api/public/collections/tour", "/api/public/collections/occurrence")
 LIMIT = 2 * 1024 * 1024
-MAX_ITEMS = 100
+MAX_ITEMS = 200
 PUBLIC_HOSTS = {"derech-tkuma.com", "www.derech-tkuma.com"}
-TOUR_FIELDS = {"id", "title", "legacy_path", "excerpt", "content_html", "featured_media",
-               "meeting_point", "duration_minutes", "audience", "status", "group_terms"}
-OCCURRENCE_FIELDS = {"id", "tour_id", "title", "starts_at", "timezone", "capacity", "price",
-                     "booking_url", "booking_enabled"}
+TOUR_FIELDS = {"title", "slug", "description", "image", "imageAlt"}
+OCCURRENCE_FIELDS = {"tourId", "startsAt", "endsAt", "timezone", "meetingPoint",
+                     "priceMinor", "currency", "capacity"}
 
 
 class AuditError(ValueError):
@@ -99,10 +98,10 @@ def fetch_projection(base_url, *, mode, new_site_live_verified=False, allow_loop
 
 def _canonical_path(path):
     if not isinstance(path, str) or not path.startswith("/") or not path.endswith("/") or "//" in path or "\\" in path:
-        raise AuditError("legacy_path_invalid")
+        raise AuditError("candidate_path_invalid")
     decoded = urllib.parse.unquote(path)
     if any(x in decoded for x in ("?", "#", "\\", "//")) or any(part in (".", "..") for part in decoded.split("/")):
-        raise AuditError("legacy_path_invalid")
+        raise AuditError("candidate_path_invalid")
     return path
 
 
@@ -124,76 +123,88 @@ def audit(projection, *, origin, mode, new_site_live_verified=False, observed_at
         raise AuditError("new_site_live_verified_required")
     if not isinstance(projection, dict) or set(projection) != {"tours", "occurrences"}:
         raise AuditError("projection_missing")
-    tours, occurrences = projection["tours"], projection["occurrences"]
-    if not isinstance(tours, list) or not isinstance(occurrences, list) or len(tours) > MAX_ITEMS or len(occurrences) > MAX_ITEMS:
-        raise AuditError("projection_shape_invalid")
+    collections = {}
+    for name in ("tours", "occurrences"):
+        envelope = projection[name]
+        if not isinstance(envelope, dict) or set(envelope) != {"records"}:
+            raise AuditError("projection_shape_invalid")
+        records = envelope["records"]
+        if not isinstance(records, list) or len(records) > MAX_ITEMS:
+            raise AuditError("projection_shape_invalid")
+        collections[name] = records
+    tours, occurrences = collections["tours"], collections["occurrences"]
     ids, paths, proposals = set(), set(), []
-    for tour in tours:
-        if not isinstance(tour, dict) or tour.get("post_status", "publish") != "publish" or tour.get("tenant_slug", "derech") != "derech":
-            raise AuditError("cross_tenant_or_draft_source")
-        if not TOUR_FIELDS.issubset(tour) or set(tour) - TOUR_FIELDS - {"post_status", "tenant_slug"}:
-            raise AuditError("tour_schema_invalid")
-        tour_id = tour.get("id")
-        if type(tour_id) is not int or tour_id <= 0 or tour_id in ids:
+
+    def record_content(record, fields, kind):
+        if not isinstance(record, dict) or set(record) != {"id", "content", "version"}:
+            raise AuditError(kind + "_schema_invalid")
+        rid = record["id"]
+        if not isinstance(rid, str) or not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}", rid):
+            raise AuditError(kind + "_id_invalid")
+        if type(record["version"]) is not int or not 1 <= record["version"] <= 2**53 - 1:
+            raise AuditError(kind + "_version_invalid")
+        content = record["content"]
+        if not isinstance(content, dict) or set(content) != fields:
+            raise AuditError(kind + "_schema_invalid")
+        return rid, content
+
+    for record in tours:
+        tour_id, tour = record_content(record, TOUR_FIELDS, "tour")
+        if tour_id in ids:
             raise AuditError("tour_id_invalid")
         ids.add(tour_id)
-        path = _canonical_path(tour.get("legacy_path"))
+        slug = _text(tour["slug"], "slug", required=True, limit=160)
+        if slug != tour["slug"] or not all(c.isalnum() or c == "-" for c in slug):
+            raise AuditError("slug_invalid")
+        path = _canonical_path("/" + slug + "/")
         if path in paths:
-            raise AuditError("legacy_path_collision")
+            raise AuditError("slug_collision")
         paths.add(path)
-        title = _text(tour.get("title"), "title", required=True, limit=300)
-        excerpt = _text(tour.get("excerpt", ""), "excerpt", limit=2000)
-        _text(tour.get("content_html", ""), "content_html", limit=200000)
-        for key in ("meeting_point", "audience", "group_terms"):
-            _text(tour[key], key)
-        if (type(tour["duration_minutes"]) is not int or tour["duration_minutes"] <= 0 or
-                tour["status"] not in ("planned", "open", "closed") or
-                tour["featured_media"] is not None and not isinstance(tour["featured_media"], str)):
-            raise AuditError("tour_schema_invalid")
-        revision = _digest(tour)
+        title = _text(tour["title"], "title", required=True, limit=160)
+        description = _text(tour["description"], "description", limit=10000)
+        image = _text(tour["image"], "image", limit=2000)
+        _text(tour["imageAlt"], "imageAlt", limit=500)
+        if image and (not image.startswith("/") or image.startswith("//") or re.search(r"[\s<>\"']", tour["image"])):
+            raise AuditError("image_invalid")
+        revision = str(record["version"]) + "-" + _digest(record)
         canonical = origin + path
         for field, proposal, reason in (
-            ("seo_title", title, "CMS projection has no published SEO title field; review before setting"),
-            ("meta_description", excerpt[:155] if excerpt else None, "Excerpt is the only source text; review before setting"),
-            ("canonical", canonical, "Review exact legacy URL mapping and canonical before publication"),
-            ("sitemap_entry", canonical, "Check sitemap inclusion on the verified public site before publication"),
+            ("seo_title", title, "Review source title before setting SEO metadata"),
+            ("meta_description", description[:155] if description else None, "Source description only; editorial review required"),
+            ("canonical", canonical, "Slug-derived candidate only; verify frontend route and original URL mapping"),
+            ("sitemap_entry", canonical, "Check route and sitemap inclusion on the verified public site"),
         ):
             proposals.append({"action_id": f"derech-site-seo:{tour_id}:{field}:{revision}",
                               "tour_id": tour_id, "field": field, "source_revision": revision,
+                              "published_version": record["version"],
                               "draft_value": proposal, "reason": reason, "state": "proposed",
-                              "publication_allowed": False, "canonical_url": canonical})
+                              "publication_allowed": False, "canonical_url_candidate": canonical})
     occurrence_ids = set()
-    for item in occurrences:
-        if not isinstance(item, dict) or item.get("post_status", "publish") != "publish" or item.get("tenant_slug", "derech") != "derech":
-            raise AuditError("cross_tenant_or_draft_source")
-        if not OCCURRENCE_FIELDS.issubset(item) or set(item) - OCCURRENCE_FIELDS - {"post_status", "tenant_slug"}:
-            raise AuditError("occurrence_schema_invalid")
-        oid, parent = item.get("id"), item.get("tour_id")
-        if type(oid) is not int or oid <= 0 or oid in occurrence_ids or type(parent) is not int or parent not in ids:
+    for record in occurrences:
+        oid, item = record_content(record, OCCURRENCE_FIELDS, "occurrence")
+        parent = item["tourId"]
+        if oid in occurrence_ids or not isinstance(parent, str) or parent not in ids:
             raise AuditError("occurrence_parent_invalid")
         occurrence_ids.add(oid)
-        _text(item.get("title"), "occurrence_title", required=True, limit=300)
-        if item.get("timezone") != "Asia/Jerusalem" or type(item.get("booking_enabled")) is not bool:
-            raise AuditError("occurrence_schema_invalid")
-        price = item["price"]
-        if (type(item["capacity"]) is not int or item["capacity"] <= 0 or not isinstance(price, dict) or
-                set(price) != {"amount_minor", "currency"} or type(price["amount_minor"]) is not int or
-                price["amount_minor"] < 0 or price["currency"] != "ILS"):
-            raise AuditError("occurrence_schema_invalid")
+        _text(item["meetingPoint"], "meetingPoint", required=True, limit=1000)
+        _text(item["timezone"], "timezone", required=True, limit=80)
+        for key in ("startsAt", "endsAt"):
+            value = item[key]
+            if (not isinstance(value, str) or len(value) > 40 or not re.fullmatch(
+                    r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{3})?)?(?:Z|[+-]\d{2}:\d{2})", value)):
+                raise AuditError("occurrence_time_invalid")
         try:
-            starts = datetime.fromisoformat(item["starts_at"])
-            if starts.utcoffset() is None:
+            from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+            ZoneInfo(item["timezone"])
+            start, end = (datetime.fromisoformat(item[key].replace("Z", "+00:00")) for key in ("startsAt", "endsAt"))
+            if start.utcoffset() is None or end.utcoffset() is None or end <= start:
                 raise ValueError()
-        except (KeyError, TypeError, ValueError):
+        except (KeyError, TypeError, ValueError, AttributeError, ZoneInfoNotFoundError):
             raise AuditError("occurrence_time_invalid") from None
-        if item.get("booking_url") is not None:
-            if not isinstance(item["booking_url"], str):
-                raise AuditError("booking_url_invalid")
-            u = urllib.parse.urlsplit(item["booking_url"])
-            if u.scheme != "https" or not u.hostname or u.username or u.password:
-                raise AuditError("booking_url_invalid")
-        if item["booking_enabled"] != bool(item["booking_url"]):
-            raise AuditError("booking_url_invalid")
+        if (type(item["capacity"]) is not int or not 1 <= item["capacity"] <= 100000 or
+                type(item["priceMinor"]) is not int or not 0 <= item["priceMinor"] <= 100000000 or
+                item["currency"] != "ILS"):
+            raise AuditError("occurrence_schema_invalid")
     observed_at = observed_at or datetime.now(timezone.utc)
     if observed_at.tzinfo is None:
         raise AuditError("observed_time_invalid")
@@ -203,7 +214,8 @@ def audit(projection, *, origin, mode, new_site_live_verified=False, observed_at
             "source_sha256": _digest(projection), "published_tours": len(tours),
             "published_occurrences": len(occurrences), "proposals": proposals,
             "inventory_may_be_capped": len(tours) == MAX_ITEMS or len(occurrences) == MAX_ITEMS,
-            "new_site_live_verified": bool(new_site_live_verified), "auto_publish": False}
+            "source_adapter": "platform-cms-public-collections/v1",
+            "new_site_live_verified": bool(new_site_live_verified), "auto_publish": False, "no_publish": True}
 
 
 def main():

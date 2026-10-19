@@ -1,0 +1,18 @@
+{
+  "audience": "internal_only",
+  "auto_publish": false,
+  "inventory_may_be_capped": false,
+  "mode": "staging",
+  "new_site_live_verified": false,
+  "no_publish": true,
+  "observed_at": "2026-10-19T13:36:54.187394+00:00",
+  "origin": "http://127.0.0.1:5174",
+  "proposals": [],
+  "published_occurrences": 0,
+  "published_tours": 0,
+  "schema": "derech-new-site-seo-drafts/v1",
+  "source_adapter": "platform-cms-public-collections/v1",
+  "source_sha256": "c51abbfcdbd01babd70d24dd",
+  "status": "no_published_tours",
+  "tenant_slug": "derech"
+}

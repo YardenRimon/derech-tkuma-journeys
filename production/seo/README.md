@@ -1,25 +1,36 @@
-# New-site SEO draft adapter
+# Platform CMS SEO draft adapter
 
-`audit.py` is a read-only Python standard-library adapter for the Derech CMS projection. It makes exactly two fixed GET requests on success: `/api/content/tours` and `/api/content/occurrences`. It does not crawl pages, follow redirects, query WordPress admin, access credentials, write to the CMS, queue messages, or publish. It is an executable source for the existing workflow; it adds no schedule.
+`audit.py` is a read-only Python standard-library adapter for the shared platform CMS. It reads the actual public collection routes defined by `platform-cms/app/api/public/collections/[kind]/route.ts`, using the content definitions in `platform-cms/lib/collection-core.ts` and published projection in `platform-cms/lib/collection-d1.ts`.
 
-The origin accepts only `https://derech-tkuma.com` or `https://www.derech-tkuma.com` on port 443. A deliberate staging invocation may use a literal loopback origin with `--allow-loopback`; private addresses and other domains are rejected. Redirects are disabled and the final response URL must equal the requested URL. No proxy environment is inherited. Each GET uses an eight-second network timeout, with an aggregate response cap of 2 MiB. Returned CMS collections cap at 100 each. The timeout is the socket-operation timeout, not a guaranteed whole-process deadline; an outer runner should impose a total process deadline for unattended execution.
+Exactly two fixed GET requests run on success:
 
-Only the published public projection is accepted. The adapter validates both arrays, the exact documented Derech field sets, unique IDs and legacy paths, published parent references, and occurrence shapes. Explicit draft or other-tenant markers block the run. The public endpoint's published-only guarantee remains a dependency; this receipt does not independently query WordPress status. A generic WordPress REST response is rejected. Empty published arrays produce `no_published_tours`, never fabricated content. No prices are emitted in proposals or performance reports.
+- `/api/public/collections/tour`
+- `/api/public/collections/occurrence`
 
-Each proposal is `proposed`, `publication_allowed: false`, and keyed by `tour ID + field + canonical JSON source revision`. Identical snapshots retain identical action IDs for downstream deduplication; a CMS edit changes the revision. There are no live write operations. The revision is a snapshot digest, not WordPress's revision number. All receipts remain `internal_only`, including staging. Proposed titles reuse source titles; descriptions reuse excerpts and require editorial review. Missing excerpts produce a null proposal rather than invented copy. The projection contains no dedicated SEO fields, so proposals do not claim that the published site is missing them. Canonical and sitemap actions require a subsequent live audit before application. No rankings, indexing, robots, rendered HTML, conversion, or SEO uplift claim is made.
+Each response must be `{ "records": [{ "id": "resource-id", "content": {}, "version": 1 }] }`. The published version is an integer, IDs are the platform's bounded string resource IDs. Tour content is exactly `title`, `slug`, `description`, `image`, `imageAlt`. Occurrence content is exactly `tourId`, `startsAt`, `endsAt`, `timezone`, `meetingPoint`, `priceMinor`, `currency`, `capacity`. Internal admin records, draft snapshots, extra tenant/account fields, generic CMS records, malformed fields and missing collections fail closed. Occurrences require a parent in the same published tour projection. No prices appear in draft proposals.
 
-Staging command, **only after CMS initialization and public projection acceptance**:
+The public route selects published content only; it derives tenant/site scope from deployment-owned configuration and removes occurrences whose parent is withdrawn. These public responses deliberately omit tenant/site IDs: the adapter depends on the verified origin and deployment configuration for site identity. It cannot independently prove tenant membership from the payload. It never requests the authenticated admin routes or credentials.
+
+The source allows only `https://derech-tkuma.com` or `https://www.derech-tkuma.com` on port 443. Staging may use an explicit loopback origin with `--allow-loopback`. Private addresses and other origins are rejected. Redirects are disabled and final response URLs must exactly equal requested URLs. No proxy environment is inherited. Each request uses an eight-second socket-operation timeout; an unattended runner should also impose a whole-process deadline. Responses share an aggregate 2 MiB cap, and each collection caps at 200 records, matching the current store. `inventory_may_be_capped` warns when either reaches that cap; completeness beyond it is not asserted.
+
+All results are `internal_only`, including public mode. Every draft action is `proposed`, `publication_allowed: false`; receipts carry `auto_publish: false` and `no_publish: true`. Stable action IDs combine tour ID, field, published version and deterministic record hash. Repeated snapshots deduplicate; a version or content edit changes the key. Proposed title/description reuse source content and require editorial review. Missing descriptions remain null rather than invented text. Canonical/sitemap values are only slug-derived URL candidates: frontend routing and original URL continuity require separate verification. The projection has no SEO fields, so the adapter cannot claim that rendered pages lack existing metadata.
+
+There is no page crawler, CMS write, publication, delivery, scheduler or new sender. Indexing, robots, rendered metadata, analytics events, bookings and SEO uplift are outside this receipt. The existing runtime sacred-time and delivery gates remain required for downstream proactive work.
+
+Local staging verification command:
 
 ```sh
-python3 production/seo/audit.py --origin http://127.0.0.1:8782 --mode staging --allow-loopback
+python3 production/seo/audit.py --origin http://127.0.0.1:5174 --mode staging --allow-loopback
 ```
 
-Public command, **only after the original site's transition is accepted and the new site is verified live**:
+Public invocation requires accepted site transition and independent live verification:
 
 ```sh
 python3 production/seo/audit.py --origin https://derech-tkuma.com --mode public --new-site-live-verified
 ```
 
-The explicit flag records the caller's gate attestation; it cannot prove DNS, site identity, mobile/desktop acceptance, or analytics events by itself. Do not set it for a preview. Existing runtime sacred-time and delivery gates remain in force when the workflow consumes a receipt. Receipts do not authorize outbound messages or publication.
+The flag records the caller's gate attestation; it does not prove DNS, frontend identity, desktop/mobile acceptance or analytics events by itself.
 
-Validation on 2026-10-19: eight fixture-only tests passed with `python3 -m unittest discover -s production/seo -v`: stable keys/revision changes; draft, other-tenant and orphan rejection; missing/malformed schema; exact bounded requests; private/off-origin endpoints and redirects; explicit loopback gating; malformed JSON and aggregate limits. No public or staging endpoint was probed. CMS initialization is blocked pending owner approval, so integration and published-content acceptance remain pending.
+Validation on 2026-10-19: eight fixture tests pass using `python3 -m unittest discover -s production/seo -v`. They cover actual collection envelopes and version keys; admin/private/other-schema rejection; malformed, missing and empty collections; occurrence and slug constraints; the two fixed GETs; private/off-origin endpoints and redirects; explicit staging loopback; invalid JSON and aggregate limits. No external writes, deployment, message or public-source probe was performed.
+
+Real local acceptance at `2026-10-19T13:36:54.187394Z`: the command above completed against the running platform CMS at port 5174. Both published collections were empty. The receipt is `local-empty-projection-2026-10-19.json`: `status: no_published_tours`, zero tours/occurrences/proposals, `audience: internal_only`, `no_publish: true`, `auto_publish: false`. This verifies the adapter/public route integration for empty state, not rendered SEO or populated tour acceptance. The initial read found no listener; after the owning task restored the local process, the single verification succeeded.

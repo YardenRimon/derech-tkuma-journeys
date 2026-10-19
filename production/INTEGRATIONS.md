@@ -2,7 +2,7 @@
 
 | תחום | הנכס הקיים / המידע הידוע | בדיקת קבלה הנדרשת |
 |---|---|---|
-| CMS | רשומות מסלולים ומועדי סיור, עורך WordPress בעברית | טיוטה אינה פומבית; עריכה ופרסום מעדכנים את העמוד המתאים; נתיב קיים נשמר; השבתת מועד מונעת הרשמה |
+| CMS | רשומות מסלולים ומועדי סיור, עורך Shared platform CMS בעברית | טיוטה אינה פומבית; עריכה ופרסום מעדכנים את העמוד המתאים; נתיב קיים נשמר; השבתת מועד מונעת הרשמה |
 | תוכן מסחרי | מחירים, תאריכים, זמינות, תנאי קבוצות טרם אומתו לחדש | בעל התוכן מאשר ערכים בפועל; אין מילוי אוטומטי ממחיר ישן או ניחוש |
 | מייל | החשבון הארגוני derechtkuma@gmail.com זוהה בחלון שהוקצה | לזהות את ספק המשלוח בפועל ואת כתובת הנמען; טופס אחד מגיע, אין כפילות, שגיאה לא מוצגת כהצלחה; אין הסקה ש־Gmail הוא ספק transactional |
 | WhatsApp | מספר 972535955166 מופיע בקישור הציבורי המתוקן | פתיחה במובייל/מחשב ליעד המאומת; אירוע קליק נפרד מפנייה; שליחה אוטומטית רק עם נכס API מורשה |
@@ -15,3 +15,6 @@
 צינור GitHub בתיקיית github-workflows מוכן לבדיקה בענף מבודד; הצבתו תחת `.github/workflows/` במאגר אינה מקימה אוטומטית secrets/environments/branch protection. אין לסמן CI/CD כפעיל לפני run מוצלח והפעלה אמיתית. חשבון SSH של GitHub יהיה תחום לשירות האתר, ללא root או גישה למסדי הבוטים. אין להעתיק ל־GitHub את מפתח ה־SSH הראשי הקיים.
 
 Grow: [Overview](https://developers.grow.business/reference/regular-payment-overview), [Webhooks](https://developers.grow.business/docs/webhooks). הנכסים והקישורים בטבלה מבוססים על מצב הפרויקט; הגישה והחיבורים שטרם אומתו נשארים שערי ביצוע, לא הושלמו מעצם כתיבת החוזה.
+
+
+CMS target supersedes the stopped WordPress experiment. Reuse platform-cms and existing Sites identity/auth. CI is not CD: Sites version publication has no durable GitHub merge hook yet, including in Gvanim. Do not activate the old SSH/WordPress staging workflow.

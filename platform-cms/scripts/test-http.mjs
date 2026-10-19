@@ -1,0 +1,34 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const origin='http://127.0.0.1:5174';let cookie='';
+const req=(path,options={})=>fetch(origin+path,{...options,headers:{...(cookie?{cookie}:{}),...options.headers}});
+async function json(path,body,expected=200){const r=await req(path,body?{method:'POST',headers:{origin,'content-type':'application/json'},body:JSON.stringify(body)}:{});const data=await r.json();assert.equal(r.status,expected,JSON.stringify(data));return data;}
+assert.equal((await req('/api/cms/page?slug=/')).status,401);
+assert.equal((await req('/api/cms/page?slug=/',{headers:{'oai-authenticated-user-id':'local_seedy','oai-authenticated-user-email':'seedy@sites.test'}})).status,401);
+assert.equal((await req('/api/collections/tour')).status,401);
+const signin=await req('/signin-with-chatgpt?return_to=%2Fadmin',{redirect:'manual'});assert.equal(signin.status,302);cookie=signin.headers.get('set-cookie').split(';')[0];
+for(const path of ['/admin','/admin/collections','/admin/users'])assert.equal((await req(path)).status,200);
+const pages=JSON.parse(readFileSync(new URL('../lib/generated-pages.json',import.meta.url)));
+for(const slug of Object.keys(pages)){const page=await json(`/api/cms/page?slug=${encodeURIComponent(slug)}`);assert.equal(page.slug,slug);const response=await req(encodeURI(slug));assert.equal(response.status,200);assert.match(response.headers.get('x-robots-tag'),/noindex/);const html=await response.text();assert.match(html,/<meta name="robots" content="noindex/);assert.equal(html,pages[slug].shellPrefix+pages[slug].sections.map(x=>x.html).join('')+pages[slug].shellSuffix);}
+let page=await json('/api/cms/page?slug=/');const baseline=structuredClone(page.draft);let revision=page.revision;
+revision=(await json('/api/cms/save',{slug:'/',revision,draft:baseline})).revision;
+await json('/api/cms/publish',{slug:'/',revision});page=await json('/api/cms/page?slug=/');revision=page.revision;const version=page.publishedVersion;
+const field=Object.keys(page.base.fields).find(x=>page.base.fields[x].type==='text');const marker='LOCAL CMS PRIVATE DRAFT '+Date.now();const draft=structuredClone(page.draft);draft.fields[field]={value:marker};
+revision=(await json('/api/cms/save',{slug:'/',revision,draft})).revision;
+assert.ok(!(await (await req('/')).text()).includes(marker));await json('/api/cms/save',{slug:'/',revision:revision-1,draft},409);
+assert.ok((await (await req('/admin/edit?slug=/')).text()).includes(marker));
+revision=(await json('/api/cms/publish',{slug:'/',revision})).revision;assert.ok((await (await req('/')).text()).includes(marker));
+revision=(await json('/api/cms/rollback',{slug:'/',revision,version})).revision;assert.ok(!(await (await req('/')).text()).includes(marker));
+revision=(await json('/api/cms/save',{slug:'/',revision,draft:baseline})).revision;
+assert.equal((await req('/api/cms/save',{method:'POST',headers:{origin:'https://outside.invalid','content-type':'application/json'},body:'{}'})).status,403);
+const image=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/Z0sAAAAASUVORK5CYII=','base64');
+const upload=await req('/api/cms/upload',{method:'POST',headers:{origin,'content-type':'image/png'},body:image});assert.equal(upload.status,201);const media=await upload.json();assert.deepEqual(Buffer.from(await (await req(media.url)).arrayBuffer()),image);
+const tourId='http-test-'+Date.now(),tour={title:'סיור בדיקה מקומי',slug:'סיור-בדיקה',description:'',image:'',imageAlt:''};
+let record=(await json('/api/collections/tour',{id:tourId,operation:'save',expectedRevision:0,content:tour})).record;
+let published=await json('/api/public/collections/tour');assert.ok(!published.records.some(x=>x.id===tourId));
+record=(await json('/api/collections/tour',{id:tourId,operation:'publish',expectedRevision:record.revision})).record;
+published=await json('/api/public/collections/tour');assert.ok(published.records.some(x=>x.id===tourId));assert.ok(published.records.every(x=>!Object.hasOwn(x,'draft')));
+record=(await json('/api/collections/tour',{id:tourId,operation:'delete',expectedRevision:record.revision})).record;
+await json('/api/collections/tour',{id:tourId,operation:'publish',expectedRevision:record.revision});published=await json('/api/public/collections/tour');assert.ok(!published.records.some(x=>x.id===tourId));
+assert.equal((await json(`/api/collections/tour?id=${tourId}&history=1`)).history.length,4);
+console.log('PASS loopback HTTP: anonymous/spoofed-header denial, protected UI, 3 source-exact pages+noindex, draft isolation, save conflict, publish/rollback, CSRF denial, R2 upload/readback, collection lifecycle and public projection. Local page content restored.');
