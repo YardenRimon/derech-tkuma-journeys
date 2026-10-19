@@ -31,7 +31,7 @@ let jwksRequests = 0;
 const fetcher = async (input, init) => {
   jwksRequests++;
   assert.equal(String(input), `${issuer}/cdn-cgi/access/certs`);
-  assert.equal(init.redirect, "error");
+  assert.equal(init.redirect, "manual");
   assert.ok(init.signal);
   assert.equal(init.headers["user-agent"], "DerechCMSAccessVerifier/1.0");
   return Response.json({ keys: [publicJwk] });

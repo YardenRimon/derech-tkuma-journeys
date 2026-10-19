@@ -212,7 +212,8 @@ async function getJwks(issuer: string, fetcher: typeof fetch, now: number, refre
   let response: Response;
   try {
     response = await fetcher(`${issuer}/cdn-cgi/access/certs`, {
-      method: "GET", redirect: "error", signal,
+      // workerd supports follow/manual, not error. Manual + !ok below rejects every 3xx without following it.
+      method: "GET", redirect: "manual", signal,
       headers: { accept: "application/json", "user-agent": "DerechCMSAccessVerifier/1.0" },
     });
   } catch {

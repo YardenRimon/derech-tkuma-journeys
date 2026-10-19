@@ -1,5 +1,13 @@
 # Controlled Cloudflare review deployment
 
+## Access fetch runtime regression — 20 October
+
+Local workerd reproduced the live `jwks_fetch_failed`/network observation before any upstream HTTP request: Workers does not implement `redirect: "error"`. The JWKS fetch now uses `redirect: "manual"`; its existing `!response.ok || response.redirected` check rejects every 3xx without following it. Signature, issuer/audience, signed identity/time claims, the fixed issuer-derived key URL and the three-second deadline remain required. This runtime behavior is documented in Cloudflare's [Request redirect options](https://developers.cloudflare.com/workers/runtime-apis/request/).
+
+`npm run test:access-workerd` (also in `npm test`) bundles the installed Vinext fetch shim and canonical verifier into actual local workerd with compatibility date 2026-05-15. Generated RSA JWTs prove acceptance through native and real force-dynamic patched fetch, rejection of invalid signatures/claims and 301/302/303/307/308 responses, cache reuse across requests and zero redirect-target contacts. All outgoing requests are bound to a local stub Worker that never calls the network. This needs the existing Wrangler/Miniflare/esbuild development dependencies and loopback permission; it uses no account credentials. Local regression success is separate from a deployed owner-login acceptance check.
+
+Reusable diagnostic logs stay silent unless both `PLATFORM_RELEASE_STAGE=review` and `CF_ACCESS_DIAGNOSTICS=enabled` are explicitly set. Logs contain only fixed event/stage enums, assertion-presence booleans, bounded HTTP status/redirected values or timeout/network kind. No public diagnostic endpoint or provider observability setting is enabled by the source change.
+
 Adapted from MainLandpage/Gvanim's existing standalone build and Access pattern. Sites remains the default development/review target. `PLATFORM_DEPLOY_TARGET=cloudflare` selects a separate Worker, fixes `__PLATFORM_AUTH_PROVIDER__` to `cloudflare-access`, excludes Sites/mock-auth plugins and strips caller-controlled Sites identity headers before application dispatch. Application identities come exclusively from the existing RS256/JWKS/issuer/audience/time-verified Access JWT implementation. Roles and linked Access IDs remain in CMS; no role is inferred from an email header.
 
 ## Resource and identity preparation (root-owned, pending)
