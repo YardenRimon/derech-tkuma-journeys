@@ -1,0 +1,12 @@
+import assert from'node:assert/strict';
+import{readFileSync}from'node:fs';
+import{createHash}from'node:crypto';
+import{compressedSourcePages}from'../build/cloudflare-source-plugin.ts';
+const source=readFileSync(new URL('../lib/generated-pages.json',import.meta.url),'utf8'),plugin=compressedSourcePages(),id=plugin.resolveId('@/lib/generated-pages.json');
+assert.equal(plugin.resolveId('@/lib/current-collections.json'),undefined);
+assert.equal(plugin.load('unrelated-module'),undefined);
+const code=plugin.load(id);assert(code.includes('brotliDecompressSync'));assert(code.length<source.length/4,'packed transport should remove the oversized repeated source payload');
+const loaded=(await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'))).default,expected=JSON.parse(source),digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
+assert.equal(digest(loaded),digest(expected),'all source structure/text/HTML/image/IDs must survive runtime decode');assert.equal(Object.keys(loaded).length,37);
+const vite=readFileSync(new URL('../vite.config.ts',import.meta.url),'utf8');assert(vite.includes('...(standalone?[compressedSourcePages()]:[])'));
+console.log(JSON.stringify({losslessSourcePacking:true,pages:37,sourceJsonBytes:Buffer.byteLength(source),packedModuleBytes:Buffer.byteLength(code),roundTripJsonSha256:digest(loaded),sitesUnchanged:true}));

@@ -1,0 +1,10 @@
+import{readFileSync,existsSync}from'node:fs';import{validateCloudflareConfig,resolveReleaseSha}from'./build-cloudflare.mjs';
+const config=JSON.parse(readFileSync(process.argv[2],'utf8'));validateCloudflareConfig(config);const sha=resolveReleaseSha(process.env);
+if(process.env.CLOUDFLARE_ACCOUNT_ID!==config.account_id)throw new Error('Configured account does not match protected deployment environment');
+const built=JSON.parse(readFileSync(new URL('../dist/server/wrangler.json',import.meta.url),'utf8'));
+for(const key of['name','account_id','workers_dev','preview_urls'])if(built[key]!==config[key])throw new Error('Built target differs from approved config: '+key);
+for(const key of['CF_ACCESS_ISSUER','CF_ACCESS_AUDIENCE','CMS_TENANT_ID','CMS_SITE_ID','PLATFORM_RELEASE_STAGE','PLATFORM_PUBLIC_ORIGIN'])if(built.vars?.[key]!==config.vars[key])throw new Error('Built scope/auth differs: '+key);
+if(built.vars?.PLATFORM_RELEASE_SHA!==sha||(built.assets?.run_worker_first!==true||built.assets?.binding!=='ASSETS'))throw new Error('Source provenance/noindex routing is missing');
+if(built.d1_databases?.[0]?.database_id!==config.d1_databases[0].database_id||built.r2_buckets?.[0]?.bucket_name!==config.r2_buckets[0].bucket_name||built.routes?.length||built.route)throw new Error('Built resources/domain routes differ');
+if(!existsSync(new URL('../dist/server/index.js',import.meta.url)))throw new Error('Missing standalone artifact');
+console.log(JSON.stringify({validated:true,worker:config.name,sourceCommit:sha,review:true}));

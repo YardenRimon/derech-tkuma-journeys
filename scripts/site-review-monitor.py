@@ -17,7 +17,7 @@ import urllib.parse
 import urllib.request
 
 ORIGIN = 'https://derech-tkuma-demo-20261016.daring-elf-3029.chatgpt.site'
-CONFIG = Path('/etc/yarden-answer-cms.json')
+CONFIG = Path('/etc/yarden-site-monitor.json')
 ASSET = '/wp-includes/js/dist/hooks.min.js'
 ASSET_SHA = 'fc774906082b59dedcfc55b8ef127783b6d056578ff4586a8ebbdb81bbe286f1'
 PROBES = (('health', '/api/health'), ('home', '/'), ('interior', '/התצפיות/'), ('asset', ASSET))
@@ -162,6 +162,7 @@ def transition(state, observation, *, now, opening_receipt=None):
                 event = {'id': incident['id'] + ':recovery', 'kind': 'actionable_recovery', 'incidentId': incident['id'], 'at': observed}
                 status = 'actionable_recovery'
             elif not incident['openingSent']:
+                incident.setdefault('resolvedAt', observed)
                 status = 'recovery_pending_receipt'
         elif incident:
             incident['resolvedAt'] = observed
@@ -203,7 +204,7 @@ def main(argv=None):
             release = json.loads(args.release_file.read_text())['contentRelease']
             token = None if args.public_only else service_token(args.service_config)
             observation = observe(release, token)
-            receipt = protected_json(args.opening_receipt) if args.opening_receipt else None
+            receipt = protected_json(args.opening_receipt) if args.opening_receipt and args.opening_receipt.exists() else None
             state, output = transition(previous, observation, now=time.time(), opening_receipt=receipt)
             atomic_json(args.state, state)
         print(json.dumps(output, separators=(',', ':'), allow_nan=False))

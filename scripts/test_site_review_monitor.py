@@ -71,6 +71,15 @@ class IncidentTests(unittest.TestCase):
         state, _ = advance(state, 2300)
         self.assertEqual(state['incident']['id'], 'site-review:2')
 
+    def test_new_outage_gets_new_generation_even_when_old_opening_was_never_sent(self):
+        state = self.open_incident()
+        state, result = advance(state, 2000, True)
+        self.assertEqual(result['state'], 'recovery_pending_receipt')
+        state, result = advance(state, 2100)
+        self.assertEqual(state['incident']['id'], 'site-review:2')
+        self.assertEqual(state['incident']['failures'], 1)
+        self.assertEqual(result['state'], 'observing')
+
     def test_wrong_incident_and_no_notification_for_short_outage(self):
         state, _ = advance(None, 1000)
         state, result = advance(state, 1100, True)
@@ -182,8 +191,9 @@ class FileTests(unittest.TestCase):
     def test_cli_redacts_unexpected_error(self):
         with tempfile.TemporaryDirectory() as temporary:
             output = io.StringIO()
+            release = Path(temporary)/'release.json'; release.write_text(json.dumps({'contentRelease':RELEASE}))
             with patch.object(m, 'service_token', side_effect=RuntimeError(SECRET)), contextlib.redirect_stdout(output):
-                status = m.main(['--state', temporary + '/state.json'])
+                status = m.main(['--state', temporary + '/state.json','--release-file',str(release)])
             self.assertEqual(status, 2)
             self.assertNotIn(SECRET, output.getvalue())
             self.assertEqual(json.loads(output.getvalue())['code'], 'monitor_unavailable')
