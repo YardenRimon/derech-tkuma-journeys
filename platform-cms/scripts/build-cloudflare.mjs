@@ -23,7 +23,10 @@ export function resolveReleaseSha(environment){const sha=environment.WORKERS_CI_
 export function sanitizedEnvironment(environment){return Object.fromEntries(Object.entries(environment).filter(([key])=>!/(?:CLOUDFLARE|(^|_)CF_|TOKEN|SECRET|PASSWORD|AUTH|CREDENTIAL|PRIVATE_KEY|COOKIE|BEARER|JWT|DATABASE_URL|SIGNING_KEY|CMS_OWNER_EMAIL|PLATFORM_DEPLOY_TARGET|PLATFORM_RELEASE_SHA|PLATFORM_CF_CONFIG_PATH)/i.test(key)));}
 export function releasePlan(environment,config){assertNode24();validateCloudflareConfig(config);const sha=resolveReleaseSha(environment),base=sanitizedEnvironment(environment);return [
  [process.execPath,['scripts/verify-public-assets.mjs'],base],
+ ['npm',['run','prepare:pages:verify'],base],
  ['npm',['run','check'],base],['npm',['test'],base],
+ [process.execPath,['--experimental-strip-types','scripts/test-backup.mjs'],base],
+ [process.execPath,['--experimental-strip-types','scripts/test-contact.mjs'],base],
  ['npm',['run','build'],{...base,PLATFORM_DEPLOY_TARGET:'cloudflare',PLATFORM_RELEASE_SHA:sha,PLATFORM_CF_CONFIG_PATH:environment.PLATFORM_CF_CONFIG_PATH??path.join(projectRoot,'wrangler.cloudflare.json')}],
  [process.execPath,['scripts/verify-cloudflare-size.mjs'],base],
  ];}

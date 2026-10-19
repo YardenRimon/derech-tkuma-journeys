@@ -1,0 +1,73 @@
+name: Shared CMS checks
+on:
+  pull_request:
+    paths: ['platform-cms/**', 'production/**', 'scripts/*site*.py', 'scripts/cms-backup-*.py', 'scripts/*backup*.py', 'scripts/verify-cms-r2-recovery.py', 'backup-receiver/**', '.github/workflows/site-*.yml']
+  push:
+    branches: [main, production-foundation-20261019]
+    paths: ['platform-cms/**', 'production/**', 'scripts/*site*.py', 'scripts/cms-backup-*.py', 'scripts/*backup*.py', 'scripts/verify-cms-r2-recovery.py', 'backup-receiver/**', '.github/workflows/site-*.yml']
+permissions:
+  contents: read
+concurrency:
+  group: site-ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: platform-cms/package-lock.json
+      - name: Verify bounded external monitoring and incident policy
+        run: python3 -m unittest discover -s scripts -p 'test_site_review_*.py'
+      - name: Install locked application dependencies
+        working-directory: platform-cms
+        run: npm ci --no-audit --no-fund
+      - name: Verify encrypted backup receiver security and local storage
+        run: |
+          node backup-receiver/test-worker.mjs
+          python3 -m unittest discover -s backup-receiver -p 'test_*.py'
+          node backup-receiver/test-r2-local.mjs
+      - name: Verify pinned build against full source reconstruction
+        working-directory: platform-cms
+        run: npm run prepare:pages:verify
+      - name: Prepare exact public source templates
+        working-directory: platform-cms
+        run: npm run prepare:pages
+      - name: Check types and content/access/isolation contracts
+        working-directory: platform-cms
+        run: |
+          npm run check && npm test
+          node --experimental-strip-types scripts/test-backup.mjs
+          node --experimental-strip-types scripts/test-contact.mjs
+      - name: Verify real local HTTP lifecycle and public projections
+        working-directory: platform-cms
+        run: |
+          npm run setup:local
+          SITES_PERMISSIONS_TEST=1 npm run dev > /tmp/derech-cms-ci.log 2>&1 &
+          cms_pid=$!
+          trap 'result=$?; kill "$cms_pid" 2>/dev/null || true; if [ "$result" -ne 0 ]; then tail -n 100 /tmp/derech-cms-ci.log; fi' EXIT
+          ready=0
+          for attempt in $(seq 1 40); do
+            if curl --silent --fail http://127.0.0.1:5174/ > /dev/null; then ready=1; break; fi
+            if ! kill -0 "$cms_pid" 2>/dev/null; then break; fi
+            sleep 1
+          done
+          test "$ready" -eq 1
+          npm run test:http
+          npm run test:admin-http
+          npm run test:tasks-http
+          node scripts/test-current-collections-http.mjs
+          npm run test:machine-http
+      - name: Build shared CMS
+        working-directory: platform-cms
+        run: npm run build
+      - name: Verify export and SEO source boundaries
+        run: |
+          python3 -m unittest discover -s production -p 'test_*.py'
+          python3 -m unittest discover -s production/seo -p 'test_*.py'

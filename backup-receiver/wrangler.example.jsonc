@@ -1,0 +1,18 @@
+{
+  // PREPARATION ONLY. Copy to reviewed provider deployment configuration.
+  "name": "derech-cms-backup-receiver",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-10-19",
+  "workers_dev": true,
+  "observability": { "enabled": false },
+  "vars": {
+    "BACKUP_UPLOAD_ENABLED": "false",
+    "BACKUP_RECEIVER_ORIGIN": "https://SET-EXACT-DEPLOYED-RECEIVER-HOST"
+  },
+  "r2_buckets": [
+    { "binding": "BACKUP_BUCKET", "bucket_name": "derech-tkuma-backups" }
+  ]
+  // Secret BACKUP_UPLOAD_HMAC is a NEW 32-random-byte lowercase hex value.
+  // Provision securely as a Worker secret and in root-only uploader config.
+  // No Cloudflare API token, S3 access key, private decrypt key or CMS binding.
+}

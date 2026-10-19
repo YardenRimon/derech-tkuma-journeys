@@ -1,0 +1,20 @@
+--- a/run.py
++++ b/run.py
+@@ -19,8 +19,15 @@
+ subprocess.run(['openssl','cms','-encrypt','-binary','-aes256','-outform','DER','-in',str(plain),'-out',str(partial),'/etc/yarden-platform-backup/public-certificate.pem'],check=True,capture_output=True)
+ os.chmod(partial,0o600);os.replace(partial,cipher)
+ report={'version':1,'state':'encrypted_verified','createdAt':stamp,'archive':str(cipher),'ciphertextBytes':cipher.stat().st_size,'ciphertextSha256':hashlib.sha256(cipher.read_bytes()).hexdigest(),'snapshotSha256':manifest['snapshotSha256'],'proof':proof,'offServerCopyVerified':False}
+-meta=cipher.with_suffix('.json');meta.write_text(json.dumps(report));os.chmod(meta,0o600)
+-latest=base/'latest.json';tmp=base/'.latest.tmp';tmp.write_text(json.dumps(report));os.chmod(tmp,0o600);os.replace(tmp,latest)
++sys.path.insert(0,'/opt/yarden-cms-backup')
++from backup_upload import finalize_backup,UploadError
++try:
++ report=finalize_backup(report,base)
++except UploadError:
++ # Preserve ciphertext and old latest; remove only verified disposable plaintext.
++ shutil.rmtree(work)
++ print('{"state":"offserver_copy_unverified","complete":false}')
++ sys.exit(2)
+ # Remove only this run's disposable plaintext working directory after encryption+restore proof.
+ shutil.rmtree(work)
+ print(json.dumps(report))

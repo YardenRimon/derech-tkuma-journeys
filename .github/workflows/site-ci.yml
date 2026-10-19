@@ -1,10 +1,10 @@
 name: Shared CMS checks
 on:
   pull_request:
-    paths: ['platform-cms/**', 'production/**', 'scripts/*site*.py', 'scripts/cms-backup-*.py', '.github/workflows/site-*.yml']
+    paths: ['platform-cms/**', 'production/**', 'scripts/*site*.py', 'scripts/cms-backup-*.py', 'scripts/*backup*.py', 'scripts/verify-cms-r2-recovery.py', 'backup-receiver/**', '.github/workflows/site-*.yml']
   push:
     branches: [main, production-foundation-20261019]
-    paths: ['platform-cms/**', 'production/**', 'scripts/*site*.py', 'scripts/cms-backup-*.py', '.github/workflows/site-*.yml']
+    paths: ['platform-cms/**', 'production/**', 'scripts/*site*.py', 'scripts/cms-backup-*.py', 'scripts/*backup*.py', 'scripts/verify-cms-r2-recovery.py', 'backup-receiver/**', '.github/workflows/site-*.yml']
 permissions:
   contents: read
 concurrency:
@@ -28,6 +28,11 @@ jobs:
       - name: Install locked application dependencies
         working-directory: platform-cms
         run: npm ci --no-audit --no-fund
+      - name: Verify encrypted backup receiver security and local storage
+        run: |
+          node backup-receiver/test-worker.mjs
+          python3 -m unittest discover -s backup-receiver -p 'test_*.py'
+          node backup-receiver/test-r2-local.mjs
       - name: Verify pinned build against full source reconstruction
         working-directory: platform-cms
         run: npm run prepare:pages:verify
@@ -58,6 +63,7 @@ jobs:
           npm run test:admin-http
           npm run test:tasks-http
           node scripts/test-current-collections-http.mjs
+          npm run test:machine-http
       - name: Build shared CMS
         working-directory: platform-cms
         run: npm run build
