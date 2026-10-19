@@ -254,7 +254,7 @@
       if (result.permissions) {
         state.canPublish = result.permissions.canPublish;
         buttons.publish.hidden = !state.canPublish;
-        const usersLink = document.querySelector('.admin-header a[href="/admin/users"]');
+        const usersLink = document.querySelector('.admin-navigation a[href="/admin/users"]');
         if (usersLink) usersLink.hidden = result.permissions.role !== "system_admin";
       }
       state.slug = result.slug;

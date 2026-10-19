@@ -1,3 +1,4 @@
+import AdminShell from "./AdminShell";
 /* eslint-disable @next/next/no-css-tags, @next/next/no-html-link-for-pages -- Protected pages use full navigation to refresh server permissions and initialize their DOM editor. */
 import { requireChatGPTUser, chatGPTSignOutPath } from "@/app/chatgpt-auth";
 import { listPages } from "@/lib/cms";
@@ -22,19 +23,10 @@ export default async function AdminPage() {
     unavailable = error instanceof CmsError && error.status === 503;
   }
   if (!email) {
-    return <main dir="rtl" style={{ padding: "3rem", fontFamily: "sans-serif" }}>
-      <h1>{unavailable ? "העריכה אינה זמינה כרגע" : "אין הרשאה"}</h1>
-      <p>{unavailable ? "נסה שוב בעוד כמה דקות." : "יש לפנות למנהל המערכת לקבלת הרשאה לחשבון שאיתו התחברת."}</p>
-      <a href={chatGPTSignOutPath("/admin")}>התחברות עם חשבון אחר</a>
-    </main>;
+    return <AdminShell active="/admin" title={unavailable ? "העריכה אינה זמינה כרגע" : "אין הרשאה"}><section className="admin-card"><p>{unavailable ? "נסה שוב בעוד כמה דקות." : "יש לפנות למנהל המערכת לקבלת הרשאה לחשבון שאיתו התחברת."}</p><a href={chatGPTSignOutPath("/admin")}>התחברות עם חשבון אחר</a></section></AdminShell>;
   }
   const pages = listPages();
-  return <main id="admin-app" dir="rtl" data-role={role} data-can-publish={String(canPublish)}>
-      <link rel="stylesheet" href="/admin.css" />
-      <header className="admin-header">
-        <div><strong>עריכת אתר דרך התקומה</strong><span> מחובר: {email} · {role === "system_admin" ? "מנהל מערכת" : "עורך תוכן"}</span></div>
-        <nav aria-label="ניהול האתר">{role === "system_admin" && <><a href="/admin/dashboard">דאשבורד</a><a href="/admin/reports">דוחות</a><a href="/admin/execution">ביצוע ושחזור</a></>}<a href="/admin/collections">סיורים ומועדים</a><a href="/admin/tasks">שאלות ומשימות</a>{role === "system_admin" && <a href="/admin/users">משתמשים והרשאות</a>}<a id="logout" href={chatGPTSignOutPath("/")}>התנתקות</a></nav>
-      </header>
+  return <AdminShell active="/admin" title="עריכת עמודי האתר" description="בחר עמוד וערוך את התוכן ישירות בתצוגה המקדימה. שמור טיוטה ובדוק אותה לפני הפרסום." email={email} role={role} id="admin-app" className="admin-editor" canPublish={canPublish}>
       <div className="admin-toolbar">
         <label htmlFor="page-picker">עמוד</label>
         <select id="page-picker" defaultValue="/">{pages.map((page) => <option key={page.slug} value={page.slug}>{page.title}</option>)}</select>
@@ -58,5 +50,5 @@ export default async function AdminPage() {
         </aside>
       </div>
       <Script src="/admin.js" strategy="afterInteractive" />
-    </main>;
+    </AdminShell>;
 }

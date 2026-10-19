@@ -1,5 +1,6 @@
+import AdminShell from "../AdminShell";
 /* eslint-disable @next/next/no-css-tags, @next/next/no-html-link-for-pages -- Protected pages use full navigation to refresh server permissions and initialize their DOM editor. */
-import { requireChatGPTUser, chatGPTSignOutPath, getAuthProvider } from "@/app/chatgpt-auth";
+import { requireChatGPTUser, getAuthProvider } from "@/app/chatgpt-auth";
 import { authorizeCmsUser, CmsError } from "@/lib/access";
 import Script from "next/script";
 
@@ -12,13 +13,11 @@ export default async function UsersPage() {
   try { email = (await authorizeCmsUser("users")).email; }
   catch (error) {
     const unavailable = error instanceof CmsError && error.status === 503;
-    return <main className="admin-denied" dir="rtl"><h1>{unavailable ? "ניהול המשתמשים אינו זמין כרגע" : "אין הרשאה לניהול משתמשים"}</h1><p>{unavailable ? "נסה שוב בעוד כמה דקות." : "ניהול המשתמשים והרשאותיהם זמין למנהלי מערכת בלבד."}</p><a href="/admin">חזרה לעריכת תוכן</a></main>;
+    return <AdminShell active="/admin/users" title={unavailable ? "ניהול המשתמשים אינו זמין כרגע" : "אין הרשאה לניהול משתמשים"}><section className="admin-card"><p>{unavailable ? "נסה שוב בעוד כמה דקות." : "ניהול המשתמשים והרשאותיהם זמין למנהלי מערכת בלבד."}</p><a href="/admin">חזרה לעריכת תוכן</a></section></AdminShell>;
   }
-  return <main id="user-management" dir="rtl" data-current-email={email}>
-    <link rel="stylesheet" href="/admin.css" />
-    <header className="admin-header"><strong>ניהול אתר דרך התקומה</strong><nav aria-label="ניהול האתר"><a href="/admin">עריכת תוכן</a><a href={chatGPTSignOutPath("/")}>התנתקות</a></nav></header>
+  return <AdminShell active="/admin/users" title="משתמשים והרשאות" description="ניהול גישת הצוות, תפקידי עריכה והרשאות פרסום." email={email} role="system_admin" id="user-management" currentEmail={email}>
     <div className="users-container">
-      <div className="users-heading"><div><h1>משתמשים והרשאות</h1><p>{getAuthProvider() === "sites" ? "המשתמשים מתחברים עם חשבון ChatGPT באימייל שמופיע כאן." : "המשתמשים מתחברים עם האימייל שמופיע כאן באמצעות ההתחברות המאובטחת של הארגון."}</p></div><button id="add-user" type="button" aria-expanded="false" aria-controls="create-user">הוסף משתמש</button></div>
+      <div className="users-heading"><div><p>{getAuthProvider() === "sites" ? "המשתמשים מתחברים עם חשבון ChatGPT באימייל שמופיע כאן." : "המשתמשים מתחברים עם האימייל שמופיע כאן באמצעות ההתחברות המאובטחת של הארגון."}</p></div><button id="add-user" type="button" aria-expanded="false" aria-controls="create-user">הוסף משתמש</button></div>
       <p className="users-help">מנהל מערכת מנהל משתמשים ותוכן. עורך תוכן שומר טיוטות; ניתן להעניק לו גם הרשאת פרסום ושחזור גרסאות. לא נשלחות הודעות הזמנה.</p>
       <form id="create-user" className="user-form" hidden>
         <h2>הוספת משתמש</h2>
@@ -32,5 +31,5 @@ export default async function UsersPage() {
       <section id="users-list" aria-label="משתמשי האתר" />
     </div>
     <Script src="/users.js" strategy="afterInteractive" />
-  </main>;
+  </AdminShell>;
 }

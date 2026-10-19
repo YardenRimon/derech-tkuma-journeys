@@ -644,18 +644,18 @@
     },
     {
       "path": "admin.css",
-      "bytes": 7496,
-      "sha256": "5dcecc5d79c2d34541e234200e527df60a5d39fd2f46f2fd123c413fe5010abb"
+      "bytes": 21537,
+      "sha256": "807f90b57e14a6049f42f6cfe6a8904c64c483ca0796a1290e974ff09e0f4342"
     },
     {
       "path": "admin.js",
-      "bytes": 17001,
-      "sha256": "fba4943e16da2e71229bd32da6cddaa851b0581f48cba80d5940858345bf1064"
+      "bytes": 17005,
+      "sha256": "fafe9ffa51ce0f3a6f497f785c5ffb5ded1f8ee97fb5fd404fda8df36f2c55f1"
     },
     {
       "path": "collections.js",
-      "bytes": 8787,
-      "sha256": "c3f4f0dc280b7d041a5274d54982351190edc72b263806c4f0cdff1ba97abaf5"
+      "bytes": 9809,
+      "sha256": "60c3976295175da6b7629171dd3aa30b105ae3f848535c42b6f92c562325a793"
     },
     {
       "path": "editor.js",
@@ -674,8 +674,8 @@
     },
     {
       "path": "tasks.css",
-      "bytes": 1786,
-      "sha256": "3aefc63cfc8c25e5ce3b19e25bca123df38b9170c2bef0f4e04c57fc32a67a1b"
+      "bytes": 3519,
+      "sha256": "70943ba0e6baf320cbfd94fe7dc85599b270f383ab4f8fa2c03b4f9187b953ca"
     },
     {
       "path": "tasks.js",
