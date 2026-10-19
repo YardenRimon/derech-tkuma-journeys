@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { selectDeployment, checkApplicationSource, verifyCurrentSource, repository } from './cloudflare-cd-policy.mjs';
 
 const sourceSha = 'a'.repeat(40);
@@ -60,7 +61,7 @@ assert.throws(() => selectDeployment({ ...pushInput, event: { ...pushInput.event
 const runningRun = { ...run, status: 'in_progress', conclusion: null, run_attempt: 2 };
 // GitHub's documented job schema does not require run_attempt; the endpoint is attempt-specific.
 const verifyJob = { id: 777, run_id: 12345, head_sha: sourceSha, name: 'verify', status: 'completed', conclusion: 'success' };
-const jobResponse = { total_count: 2, jobs: [verifyJob, { name: 'deploy-review / deploy', status: 'in_progress' }] };
+const jobResponse = { total_count: 2, jobs: [verifyJob, { name: 'deploy-review', status: 'in_progress' }] };
 mock = transport({ ci: runningRun, jobs: jobResponse });
 await verifyCurrentSource(verifiedCandidate, { token: 'private-test-token', fetcher: mock.fetcher });
 assert.equal(mock.calls.length, 3);
@@ -82,9 +83,9 @@ for (const options of [
 const workflow = readFileSync(new URL('./github-workflows/site-cloudflare.yml', import.meta.url), 'utf8');
 assert(workflow.includes('  workflow_run:'));
 for (const required of ["workflows: ['Shared CMS checks']", 'types: [completed]', "github.event.workflow_run.event == 'push'", "github.event.workflow_run.conclusion == 'success'", 'github.event.workflow_run.head_repository.full_name == github.repository', "vars.DERECH_CF_AUTO_DEPLOY_ENABLED == 'true'", 'github.event.workflow_run.head_sha || github.sha', 'WORKERS_CI_COMMIT_SHA:', 'persist-credentials: false', 'environment: derech-cloudflare-review', 'cancel-in-progress: false', 'actions: read']) assert(workflow.includes(required), required);
-assert(workflow.includes('  workflow_call:'));
-assert(workflow.includes("inputs.verify_result == 'success'"));
-assert(workflow.includes("vars.DERECH_CF_VERIFIED_JOB_DEPLOY_ENABLED == 'true'"));
+assert(!workflow.includes('  workflow_call:'));
+assert(!workflow.includes('inputs.verify_result'));
+assert(!workflow.includes("github.event_name == 'push'"), 'standalone cannot duplicate the inline push deployment');
 assert.equal((workflow.match(/node (?:\.\.\/)?production\/cloudflare-cd-policy\.mjs/g) ?? []).length, 3, 'guard before build and each provider mutation');
 assert(workflow.indexOf('node production/cloudflare-cd-policy.mjs') < workflow.indexOf('node scripts/build-cloudflare.mjs'));
 assert(workflow.lastIndexOf('node production/cloudflare-cd-policy.mjs') < workflow.indexOf('npx wrangler d1 migrations apply'));
@@ -94,6 +95,31 @@ assert(!/uses:.*(?:download-artifact|\/main\b|@v\d)/.test(workflow), 'pinned act
 const ci = readFileSync(new URL('./github-workflows/site-ci.yml', import.meta.url), 'utf8');
 assert(ci.includes('run: node production/test-cloudflare-cd-policy.mjs'), 'ordinary CI must require deployment policy tests');
 assert(ci.indexOf('actions/setup-node@') < ci.indexOf('run: node production/test-cloudflare-cd-policy.mjs'));
-for (const required of ['  deploy-review:', 'needs: verify', "needs.verify.result == 'success'", 'uses: ./.github/workflows/site-cloudflare.yml', 'verify_result: ${{ needs.verify.result }}', "vars.DERECH_CF_VERIFIED_JOB_DEPLOY_ENABLED == 'true'", "cancel-in-progress: ${{ !(github.event_name == 'push' && vars.DERECH_CF_VERIFIED_JOB_DEPLOY_ENABLED == 'true') }}", 'actions: read']) assert(ci.includes(required), required);
-assert(!ci.includes('secrets: inherit'));
-console.log('Cloudflare review CD policy passed: exact SHA, same-run successful verify job/attempt API proof, legacy successful push-only gate, default-disabled flags, fork/PR/stale denial and protected non-cancelling deployment.');
+for (const required of ['  deploy-review:', 'needs: verify', "needs.verify.result == 'success'", 'environment: derech-cloudflare-review', 'DERECH_CI_VERIFY_RESULT: ${{ needs.verify.result }}', "vars.DERECH_CF_VERIFIED_JOB_DEPLOY_ENABLED == 'true'", "cancel-in-progress: ${{ !(github.event_name == 'push' && vars.DERECH_CF_VERIFIED_JOB_DEPLOY_ENABLED == 'true') }}", 'actions: read']) assert(ci.includes(required), required);
+const inline = ci.split('\n  deploy-review:\n')[1];
+assert(inline, 'review deployment is an inline job');
+for (const required of ['    runs-on: ubuntu-latest', '    steps:', '    permissions:\n      contents: read\n      actions: read', '    concurrency:\n      group: derech-cloudflare-review\n      cancel-in-progress: false', 'WORKERS_CI_COMMIT_SHA: ${{ github.sha }}', 'DERECH_DEPLOY_BRANCH: ${{ github.ref_name }}', 'ref: ${{ github.sha }}', 'CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}']) assert(inline.includes(required), required);
+assert(!/^    uses:/m.test(inline), 'inline deployment must not call another workflow');
+assert(!ci.includes('inputs.') && !ci.includes('secrets: inherit'));
+assert(!/secrets:\s*\n/.test(ci), 'no workflow secret forwarding block');
+assert(workflow.includes('concurrency:\n  group: derech-cloudflare-review\n  cancel-in-progress: false'), 'manual and automatic jobs share the identical non-cancelling deployment lock');
+for (const text of [workflow, inline]) {
+ assert.equal((text.match(/node (?:\.\.\/)?production\/cloudflare-cd-policy\.mjs/g) ?? []).length, 3, 'same-run API proof is kept before build and both mutations');
+ assert(text.indexOf('node production/cloudflare-cd-policy.mjs') < text.indexOf('node scripts/build-cloudflare.mjs'));
+ assert(text.lastIndexOf('node production/cloudflare-cd-policy.mjs') < text.indexOf('npx wrangler d1 migrations apply'));
+ assert(text.indexOf('node ../production/cloudflare-cd-policy.mjs') < text.indexOf('npx wrangler deploy'));
+ for (const name of ['Apply schema-only migrations to isolated review DB', 'Deploy checked artifact and verify source identity/noindex']) {
+  const step=text.split('      - name: '+name+'\n')[1]?.split('      - name:')[0];
+  assert(step, name);
+  const command=step.split('        run: |\n')[1];
+  const preflight=command.trim().split('\n').slice(0,2).map(line=>line.trim()).join('\n');
+  assert.equal(preflight, 'test -n "$CLOUDFLARE_API_TOKEN"\ntest -n "$CLOUDFLARE_ACCOUNT_ID"', 'separate set-e commands must guard empty provider credentials');
+  for (const [token, account, accepted] of [['', '', false], ['', 'synthetic-account', false], ['synthetic-token', '', false], ['synthetic-token', 'synthetic-account', true]]) {
+   const result=spawnSync('/bin/bash', ['-e', '-c', preflight+'\nprintf provider-reached'], {encoding:'utf8',env:{CLOUDFLARE_API_TOKEN:token,CLOUDFLARE_ACCOUNT_ID:account}});
+   assert.equal(result.status===0,accepted,'empty token/account must stop before any later provider command');
+   assert.equal(result.stdout, accepted?'provider-reached':'');
+  }
+ }
+}
+
+console.log('Cloudflare review CD policy passed: exact SHA, same-run successful verify job/attempt API proof, legacy successful push-only gate, default-disabled flags, fork/PR/stale denial and protected inline environment/non-cancelling shared deployment lock and fail-closed credential preflights.');

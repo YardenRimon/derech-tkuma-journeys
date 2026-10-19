@@ -17,6 +17,9 @@ import urllib.parse
 import urllib.request
 
 ORIGIN = 'https://derech-tkuma-demo-20261016.daring-elf-3029.chatgpt.site'
+TARGET = 'sites'
+TARGETS = {'sites': ORIGIN, 'cloudflare': 'https://derech-tkuma-review.22yarden22.workers.dev'}
+_TARGET_SELECTED = False
 CONFIG = Path('/etc/yarden-site-monitor.json')
 ASSET = '/wp-includes/js/dist/hooks.min.js'
 ASSET_SHA = 'fc774906082b59dedcfc55b8ef127783b6d056578ff4586a8ebbdb81bbe286f1'
@@ -27,6 +30,13 @@ PERSISTENCE = 15 * 60
 
 class ProbeError(Exception):
     """Contains only a fixed public error code."""
+
+def select_target(target):
+    """A fixed profile, selected once in each subprocess; never accept an arbitrary origin."""
+    global TARGET, ORIGIN, _TARGET_SELECTED
+    if target not in TARGETS or _TARGET_SELECTED and target != TARGET:
+        raise ProbeError('target_scope_invalid')
+    TARGET, ORIGIN, _TARGET_SELECTED = target, TARGETS[target], True
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, *args, **kwargs):
@@ -60,6 +70,8 @@ def protected_json(path, *, owner_uid=0, limit=MAX_BODY):
         os.close(descriptor)
 
 def service_token(path=CONFIG, *, owner_uid=0):
+    if TARGET != 'sites':
+        raise ProbeError('public_target_credential_rejected')
     value = protected_json(path, owner_uid=owner_uid)
     if not isinstance(value, dict) or value.get('version') != 1 or value.get('origin') != ORIGIN or value.get('enabled') is not True:
         raise ProbeError('service_configuration_invalid')
@@ -70,6 +82,8 @@ def service_token(path=CONFIG, *, owner_uid=0):
     return token
 
 def request(path, token):
+    if TARGET != 'sites' and token is not None:
+        raise ProbeError('public_target_credential_rejected')
     if path not in {p for _, p in PROBES}:
         raise ProbeError('probe_target_rejected')
     url = ORIGIN + urllib.parse.quote(path, safe='/-._~')
@@ -90,6 +104,8 @@ def request(path, token):
         return error.code, {}, b''
 
 def observe(release, token=None, *, transport=request, clock=time.time, monotonic=time.monotonic):
+    if TARGET != 'sites' and token is not None:
+        raise ProbeError('public_target_credential_rejected')
     if not isinstance(release, str) or not re.fullmatch(r'[a-f0-9]{64}', release):
         raise ProbeError('expected_release_invalid')
     started = clock(); results = []
@@ -186,12 +202,14 @@ def atomic_json(path, value):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--state', type=Path, required=True)
+    parser.add_argument('--target', choices=tuple(TARGETS), default='sites')
     parser.add_argument('--release-file', type=Path, default=Path(__file__).resolve().parents[1] / 'platform-cms/lib/site-release.json')
     parser.add_argument('--service-config', type=Path, default=CONFIG)
     parser.add_argument('--opening-receipt', type=Path)
     parser.add_argument('--public-only', action='store_true', help='No service credential; origin protections may return403')
     args = parser.parse_args(argv); os.umask(0o077)
     try:
+        select_target(args.target)
         directory = args.state.parent
         directory.mkdir(mode=0o700, parents=True, exist_ok=True)
         info = directory.lstat()
@@ -202,7 +220,7 @@ def main(argv=None):
             fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
             previous = protected_json(args.state, owner_uid=os.geteuid()) if args.state.exists() else None
             release = json.loads(args.release_file.read_text())['contentRelease']
-            token = None if args.public_only else service_token(args.service_config)
+            token = None if args.public_only or TARGET == 'cloudflare' else service_token(args.service_config)
             observation = observe(release, token)
             receipt = protected_json(args.opening_receipt) if args.opening_receipt and args.opening_receipt.exists() else None
             state, output = transition(previous, observation, now=time.time(), opening_receipt=receipt)
@@ -210,7 +228,7 @@ def main(argv=None):
         print(json.dumps(output, separators=(',', ':'), allow_nan=False))
         return 0 if observation['ok'] else 1
     except Exception as error:
-        allowed = {'private_file_invalid', 'private_json_invalid', 'private_state_invalid', 'service_configuration_invalid', 'service_credential_unavailable', 'expected_release_invalid', 'state_scope_invalid', 'observation_clock_invalid', 'observation_not_distinct', 'opening_receipt_invalid'}
+        allowed = {'private_file_invalid', 'private_json_invalid', 'private_state_invalid', 'service_configuration_invalid', 'service_credential_unavailable', 'expected_release_invalid', 'state_scope_invalid', 'observation_clock_invalid', 'observation_not_distinct', 'opening_receipt_invalid', 'target_scope_invalid', 'public_target_credential_rejected'}
         code = str(error) if isinstance(error, ProbeError) and str(error) in allowed else 'monitor_unavailable'
         print(json.dumps({'state': 'blocked', 'code': code, 'deliveryIntegrated': False}))
         return 2

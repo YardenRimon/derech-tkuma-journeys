@@ -18,6 +18,10 @@ import sys
 from urllib.parse import quote
 
 ORIGIN = 'https://derech-tkuma-demo-20261016.daring-elf-3029.chatgpt.site'
+TARGET = 'sites'
+TARGETS = {'sites': ORIGIN, 'cloudflare': 'https://derech-tkuma-review.22yarden22.workers.dev'}
+LEDGER = 'site_review_notices'
+_TARGET_SELECTED = False
 OWNER, CHAT, BOT = 885011787, -5379385865, 8905221076
 OPS = Path('/opt/yarden-platform/shared-ops')
 MONITOR_STATE = Path('/var/lib/yarden-site-monitor/state.json')
@@ -40,6 +44,14 @@ class AlertError(ValueError):
 
 def require(condition, code):
     if not condition: raise AlertError(code)
+
+def select_target(target):
+    global TARGET, ORIGIN, LEDGER, MONITOR_STATE, RECOVERY, _TARGET_SELECTED
+    require(target in TARGETS and (not _TARGET_SELECTED or target == TARGET), 'target_scope_invalid')
+    TARGET, ORIGIN, _TARGET_SELECTED = target, TARGETS[target], True
+    LEDGER = 'site_review_notices' if target == 'sites' else 'site_review_cf_notices'
+    MONITOR_STATE = Path('/var/lib/yarden-site-monitor/' + ('state.json' if target == 'sites' else 'cloudflare-state.json'))
+    RECOVERY = '✅ דרך התקומה — אתר הבדיקה\n\nבדיקות המוכנות, חסימת האינדוקס וקובץ התצוגה חזרו לתקינות.\n\n' + ORIGIN
 
 def encoded(value):
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
@@ -146,13 +158,13 @@ def process_snapshot(snapshot, db_path, config_path, *, now=None, gate=sacred_al
         weekly._identity(db, tenant, config)
         require({'entities_json', 'reply_markup', 'telegram_message_id', 'error'} <= {r[1] for r in db.execute('PRAGMA table_info(outbox)')}, 'outbox_schema_incompatible')
         require(gate(now) is True, 'sacred_time_closed')
-        db.execute('''CREATE TABLE IF NOT EXISTS site_review_notices(
+        db.execute(f'''CREATE TABLE IF NOT EXISTS {LEDGER}(
             incident_id TEXT NOT NULL,action_code TEXT NOT NULL,origin TEXT NOT NULL,
             monitor_id TEXT NOT NULL,first_seen REAL NOT NULL,last_seen REAL NOT NULL,
             open_key TEXT NOT NULL UNIQUE,open_sha256 TEXT NOT NULL,
             recovery_key TEXT,recovery_sha256 TEXT,resolved_at TEXT,updated_at TEXT NOT NULL,
             PRIMARY KEY(incident_id,action_code))''')
-        require(not db.execute('SELECT 1 FROM site_review_notices WHERE origin<>? LIMIT 1', (ORIGIN,)).fetchone(), 'ledger_scope_conflict')
+        require(not db.execute(f'SELECT 1 FROM {LEDGER} WHERE origin<>? LIMIT 1', (ORIGIN,)).fetchone(), 'ledger_scope_conflict')
         if not history[-1]['ok']:
             require(incident is not None, 'monitor_incident_invalid')
             candidates = [action for action in ACTIONS if qualifying(history, action)]
@@ -165,17 +177,17 @@ def process_snapshot(snapshot, db_path, config_path, *, now=None, gate=sacred_al
             for action in candidates:
                 key = 'site-review-open:derech:' + ident + ':' + action
                 text = open_text(action); text_hash = digest(text.encode())
-                prior = db.execute('SELECT * FROM site_review_notices WHERE incident_id=? AND action_code=?', (ident, action)).fetchone()
+                prior = db.execute(f'SELECT * FROM {LEDGER} WHERE incident_id=? AND action_code=?', (ident, action)).fetchone()
                 if prior:
                     require(prior['monitor_id'] == incident['id'] and prior['open_key'] == key and prior['open_sha256'] == text_hash, 'ledger_conflict')
                     row = outbox(db, key, text_hash)
                     summary['notices'].append({'state': 'duplicate', 'key': key, 'outboxState': row['state'], 'messageId': row['telegram_message_id']})
                 else:
                     enqueue(db, key, text, now, gate)
-                    db.execute('INSERT INTO site_review_notices VALUES(?,?,?,?,?,?,?,?,?,?,?,?)', (ident, action, ORIGIN, incident['id'], incident['firstSeen'], history[-1]['observedAt'], key, text_hash, None, None, None, now.isoformat()))
+                    db.execute(f'INSERT INTO {LEDGER} VALUES(?,?,?,?,?,?,?,?,?,?,?,?)', (ident, action, ORIGIN, incident['id'], incident['firstSeen'], history[-1]['observedAt'], key, text_hash, None, None, None, now.isoformat()))
                     summary['notices'].append({'state': 'queued', 'key': key, 'outboxState': 'queued', 'messageId': None})
         else:
-            for prior in db.execute('SELECT * FROM site_review_notices WHERE resolved_at IS NULL').fetchall():
+            for prior in db.execute(f'SELECT * FROM {LEDGER} WHERE resolved_at IS NULL').fetchall():
                 require(prior['action_code'] in ACTIONS, 'ledger_action_invalid')
                 opening = outbox(db, prior['open_key'], prior['open_sha256'])
                 if opening['state'] == 'queued':
@@ -196,11 +208,11 @@ def process_snapshot(snapshot, db_path, config_path, *, now=None, gate=sacred_al
                         row = outbox(db, key, text_hash); state = 'duplicate'
                     else:
                         enqueue(db, key, RECOVERY, now, gate)
-                        db.execute('UPDATE site_review_notices SET recovery_key=?,recovery_sha256=? WHERE incident_id=? AND action_code=?', (key, text_hash, prior['incident_id'], prior['action_code']))
+                        db.execute(f'UPDATE {LEDGER} SET recovery_key=?,recovery_sha256=? WHERE incident_id=? AND action_code=?', (key, text_hash, prior['incident_id'], prior['action_code']))
                         state = 'queued'
                     summary['notices'].append({'state': state, 'key': key, 'outboxState': 'queued' if state == 'queued' else row['state'], 'messageId': None if state == 'queued' else row['telegram_message_id']})
                     state = 'resolved'
-                db.execute('UPDATE site_review_notices SET resolved_at=?,updated_at=? WHERE incident_id=? AND action_code=?', (now.isoformat(), now.isoformat(), prior['incident_id'], prior['action_code']))
+                db.execute(f'UPDATE {LEDGER} SET resolved_at=?,updated_at=? WHERE incident_id=? AND action_code=?', (now.isoformat(), now.isoformat(), prior['incident_id'], prior['action_code']))
                 if state != 'resolved': summary['notices'].append({'state': state, 'key': prior['open_key']})
     return summary
 
@@ -208,6 +220,7 @@ def process_snapshot(snapshot, db_path, config_path, *, now=None, gate=sacred_al
 
 def acceptance(stage, run_id, db_path, config_path, *, now=None, gate=sacred_allowed, weekly=None, owner_dm=None, tenant=None):
     """Explicitly labelled transport drill; never invents a real incident."""
+    require(TARGET == 'sites', 'acceptance_scope_invalid')
     now = aware(now or datetime.now(timezone.utc)); require(gate(now) is True, 'sacred_time_closed')
     require(stage in ('open', 'recovery') and isinstance(run_id, str) and re.fullmatch(r'[0-9]{8}T[0-9]{6}Z', run_id), 'acceptance_scope_invalid')
     started = datetime.strptime(run_id, '%Y%m%dT%H%M%SZ').replace(tzinfo=timezone.utc)
@@ -256,14 +269,14 @@ def readback(db_path, config_path, *, weekly=None, tenant=None):
     with sqlite3.connect('file:' + quote(str(path), safe='/') + '?mode=ro', uri=True, timeout=10) as db:
         db.row_factory = sqlite3.Row; weekly._identity(db, tenant, config)
         result = []
-        exists = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='site_review_notices'").fetchone()
-        for entry in db.execute('SELECT * FROM site_review_notices ORDER BY updated_at DESC LIMIT 10') if exists else []:
+        exists = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (LEDGER,)).fetchone()
+        for entry in db.execute(f'SELECT * FROM {LEDGER} ORDER BY updated_at DESC LIMIT 10') if exists else []:
             require(entry['origin'] == ORIGIN, 'ledger_scope_conflict')
             for kind in ('open', 'recovery'):
                 if not entry[kind + '_key']: continue
                 row = outbox(db, entry[kind + '_key'], entry[kind + '_sha256'])
                 result.append({'kind': kind, 'key': row['idempotency_key'], 'outboxState': row['state'], 'messageId': row['telegram_message_id'], 'deliveryVerified': row['state'] == 'sent' and type(row['telegram_message_id']) is int and row['telegram_message_id'] > 0})
-        if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='site_review_acceptance'").fetchone():
+        if TARGET == 'sites' and db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='site_review_acceptance'").fetchone():
             for entry in db.execute('SELECT * FROM site_review_acceptance ORDER BY created_at DESC LIMIT 4'):
                 row = outbox(db, entry['outbox_key'], entry['text_sha256'])
                 result.append({'kind': 'acceptance_'+entry['stage'], 'key': row['idempotency_key'], 'outboxState': row['state'], 'messageId': row['telegram_message_id'], 'fixture': True, 'deliveryVerified': row['state'] == 'sent' and type(row['telegram_message_id']) is int and row['telegram_message_id'] > 0})
@@ -285,14 +298,14 @@ def invoke_container(code, raw):
 def host_dispatch(snapshot, ops_directory=OPS, *, readonly=False, acceptance_stage=None, run_id=None):
     # Bounded in-container execution path; stage code in our own
     # owner-only temporary directory instead of replacing shared /tmp modules.
-    child_directory = '/tmp/derech-site-review-alerts'
+    child_directory = '/tmp/derech-site-review-alerts' + ('-cloudflare' if TARGET == 'cloudflare' else '')
     def stage(name, raw):
         code = "import os,sys,stat;from pathlib import Path;p=Path("+repr(child_directory)+");p.mkdir(mode=0o700,exist_ok=True);s=p.lstat();assert stat.S_ISDIR(s.st_mode) and s.st_uid==os.geteuid() and stat.S_IMODE(s.st_mode)==0o700;f=p/"+repr(name)+";t=p/('.'+f.name+'.'+str(os.getpid()));d=os.open(t,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600);o=os.fdopen(d,'wb');o.write(sys.stdin.buffer.read());o.close();os.replace(t,f)"
         invoke_container(code, raw)
     for name in ('organic_import.py', 'tenant_holds.py', 'weekly_telegram.py', 'client_notifications.py'):
         stage(name, (Path(ops_directory) / name).read_bytes())
     stage('site_review_alerts.py', Path(__file__).read_bytes())
-    code = "import json,sys;sys.path.insert(0,"+repr(child_directory)+");import site_review_alerts as a;w,o=a.dependencies("+repr(child_directory)+");"
+    code = "import json,sys;sys.path.insert(0,"+repr(child_directory)+");import site_review_alerts as a;a.select_target("+repr(TARGET)+");w,o=a.dependencies("+repr(child_directory)+");"
     if readonly:
         code += "print(json.dumps(a.readback('/data/bridge.sqlite3','/data/runtime.json',weekly=w)))"
     elif acceptance_stage:
@@ -305,7 +318,8 @@ def host_dispatch(snapshot, ops_directory=OPS, *, readonly=False, acceptance_sta
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--state', type=Path, default=MONITOR_STATE)
+    parser.add_argument('--state', type=Path)
+    parser.add_argument('--target', choices=tuple(TARGETS), default='sites')
     parser.add_argument('--ops-directory', type=Path, default=OPS)
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument('--readback', action='store_true')
@@ -313,6 +327,8 @@ def main(argv=None):
     parser.add_argument('--run-id', help='UTC YYYYMMDDTHHMMSSZ, at most one hour old, required for explicit drill')
     args = parser.parse_args(argv)
     try:
+        select_target(args.target)
+        args.state = args.state or MONITOR_STATE
         require(os.geteuid() == 0, 'deployment_owner_required')
         if args.readback:
             result = host_dispatch(None, args.ops_directory, readonly=True)
@@ -328,7 +344,7 @@ def main(argv=None):
             result = host_dispatch(snapshot, args.ops_directory)
         print(json.dumps(result, ensure_ascii=False)); return 0
     except Exception as error:
-        codes = {'sacred_time_closed', 'deployment_owner_required', 'monitor_scope_invalid', 'monitor_history_invalid', 'monitor_clock_invalid', 'monitor_not_distinct', 'monitor_probe_shape', 'monitor_stale', 'monitor_incident_invalid', 'monitor_probe_inconsistent', 'outbox_receipt_conflict', 'ledger_scope_conflict', 'container_process_failed'}
+        codes = {'sacred_time_closed', 'deployment_owner_required', 'monitor_scope_invalid', 'monitor_history_invalid', 'monitor_clock_invalid', 'monitor_not_distinct', 'monitor_probe_shape', 'monitor_stale', 'monitor_incident_invalid', 'monitor_probe_inconsistent', 'outbox_receipt_conflict', 'ledger_scope_conflict', 'container_process_failed', 'target_scope_invalid'}
         code = str(error) if isinstance(error, AlertError) and str(error) in codes else 'site_alert_adapter_blocked'
         print(json.dumps({'state': 'blocked', 'code': code, 'deliveryVerified': False})); return 2
 
