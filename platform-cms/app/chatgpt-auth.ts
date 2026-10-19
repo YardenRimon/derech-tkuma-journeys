@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { env } from "cloudflare:workers";
-import { verifyAccessIdentity } from "@/lib/cloudflare-access";
+import { verifyAccessIdentity, accessDiagnosticsEnabled, ACCESS_DIAGNOSTIC_SCOPE_HEADER, reportAccessFailure, reportAccessHeaderPresence } from "@/lib/cloudflare-access";
 
 // Fixed at build time: a standalone Worker can never opt into Sites headers.
 declare const __PLATFORM_AUTH_PROVIDER__: "sites" | "cloudflare-access";
@@ -27,10 +27,12 @@ const CALLBACK_PATH = "/callback";
 export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
   const requestHeaders = await headers();
   if (getAuthProvider() === "cloudflare-access") {
-    const settings = env as unknown as { CF_ACCESS_ISSUER?: string; CF_ACCESS_AUDIENCE?: string };
+    const settings = env as unknown as { CF_ACCESS_ISSUER?: string; CF_ACCESS_AUDIENCE?: string; PLATFORM_RELEASE_STAGE?: string; CF_ACCESS_DIAGNOSTICS?: string };
+    const diagnose = accessDiagnosticsEnabled(settings) && requestHeaders.get(ACCESS_DIAGNOSTIC_SCOPE_HEADER) === "1";
+    if (diagnose) reportAccessHeaderPresence("app", requestHeaders.has("cf-access-jwt-assertion"));
     return verifyAccessIdentity(requestHeaders.get("cf-access-jwt-assertion") ?? "", {
       issuer: settings.CF_ACCESS_ISSUER ?? "", audience: settings.CF_ACCESS_AUDIENCE ?? "",
-    });
+    }, diagnose ? { onFailure: reportAccessFailure } : {});
   }
   const userId = requestHeaders.get(USER_ID_HEADER);
   const email = requestHeaders.get(USER_EMAIL_HEADER);

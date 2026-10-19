@@ -49,7 +49,14 @@ def main():
         (ROOT/'audit/github-cloudflare-dispatch-2026-10-20.json').write_text(json.dumps(output,indent=2)+'\n');print(json.dumps(output))
     else:
         for workflow in [WORKFLOW,'site-ci.yml']:
-            data=api('GET','/actions/workflows/'+workflow+'/runs?per_page=6',missing=True)
-            print(json.dumps({'workflow':workflow,'runs':[{key:r.get(key)for key in ['id','head_sha','head_branch','status','conclusion','html_url','created_at']}for r in (data or {}).get('workflow_runs',[])]}))
+            data=api('GET','/actions/workflows/'+workflow+'/runs?per_page=2',missing=True)
+            runs=[]
+            for run in (data or {}).get('workflow_runs',[]):
+                item={key:run.get(key)for key in ['id','head_sha','head_branch','status','conclusion','html_url','created_at']}
+                if run['status']!='completed' or run['conclusion']!='success':
+                    jobs=api('GET','/actions/runs/'+str(run['id'])+'/jobs')['jobs']
+                    item['jobs']=[{'status':j['status'],'conclusion':j['conclusion'],'steps':[{k:s.get(k)for k in ['name','status','conclusion']}for s in j.get('steps',[]) if s.get('status')=='in_progress'or s.get('conclusion')=='failure']}for j in jobs]
+                runs.append(item)
+            print(json.dumps({'workflow':workflow,'runs':runs}))
 
 if __name__=='__main__':main()

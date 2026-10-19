@@ -14,6 +14,7 @@ export function validateCloudflareConfig(config){
  try{const issuer=new URL(vars.CF_ACCESS_ISSUER);if(!configured(vars.CF_ACCESS_ISSUER)||issuer.origin!==vars.CF_ACCESS_ISSUER||!/^https:\/\/[a-z0-9-]+\.cloudflareaccess\.com$/.test(issuer.origin))throw 0;}catch{errors.push('Exact configured Cloudflare Access issuer required');}
  if(!configured(vars.CF_ACCESS_AUDIENCE)||!/^[a-f0-9]{32,128}$/.test(vars.CF_ACCESS_AUDIENCE))errors.push('Real Access application audience required');
  try{const origin=new URL(vars.PLATFORM_PUBLIC_ORIGIN);if(!configured(vars.PLATFORM_PUBLIC_ORIGIN)||origin.origin!==vars.PLATFORM_PUBLIC_ORIGIN||origin.protocol!=='https:'||!origin.hostname.endsWith('.workers.dev'))throw 0;}catch{errors.push('Configured workers.dev preview origin required');}
+ if(vars.CMS_BACKUP_BUCKET_SCOPE!=='deployment-isolated')errors.push('CMS_BACKUP_BUCKET_SCOPE must explicitly attest deployment-isolated storage');
  if(vars.CMS_ADAPTER_MODE!=='isolated-d1'||vars.CMS_TENANT_ID!=='derech'||vars.CMS_SITE_ID!=='derech-main'||vars.PLATFORM_RELEASE_STAGE!=='review')errors.push('Isolated derech/derech-main review scope required');
  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(vars.CMS_OWNER_EMAIL??''))errors.push('Configured CMS owner email required');
  if(Object.keys(vars).some(key=>/(?:SECRET|PASSWORD|TOKEN|PRIVATE_KEY|CREDENTIAL)/.test(key)))errors.push('Runtime secrets must use provider secret storage, never config vars');

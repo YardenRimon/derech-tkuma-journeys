@@ -18,7 +18,33 @@ type AccessClaims = {
   nbf?: unknown;
   iat?: unknown;
 };
-type VerifyOptions = { fetcher?: typeof fetch; now?: () => number };
+export type AccessFailureStage =
+  | "token_missing" | "config_invalid" | "token_invalid" | "claims_invalid"
+  | "time_invalid" | "jwks_fetch_failed" | "jwks_schema_invalid"
+  | "key_missing" | "key_policy_invalid" | "key_import_failed" | "signature_invalid";
+type VerifyOptions = { fetcher?: typeof fetch; now?: () => number; onFailure?: (stage: AccessFailureStage) => void };
+
+// Explicit opt-in, review only. No raw request, token, claim or error is accepted by a logger.
+export const ACCESS_DIAGNOSTIC_SCOPE_HEADER = "x-derech-internal-access-diagnostic";
+const FAILURE_STAGES = new Set<AccessFailureStage>([
+  "token_missing", "config_invalid", "token_invalid", "claims_invalid", "time_invalid",
+  "jwks_fetch_failed", "jwks_schema_invalid", "key_missing", "key_policy_invalid",
+  "key_import_failed", "signature_invalid",
+]);
+export function accessDiagnosticsEnabled(config: { PLATFORM_RELEASE_STAGE?: string; CF_ACCESS_DIAGNOSTICS?: string }): boolean {
+  return config.PLATFORM_RELEASE_STAGE === "review" && config.CF_ACCESS_DIAGNOSTICS === "enabled";
+}
+export function accessDiagnosticPath(pathname: string): boolean {
+  return pathname.startsWith("/admin") || /^\/api\/(?:users|tasks|reports|cms|collections|execution)(?:\/|$)/.test(pathname);
+}
+export function reportAccessFailure(stage: AccessFailureStage): void {
+  if (!FAILURE_STAGES.has(stage)) return;
+  try { console.warn("derech_access_diagnostic", { event: "verification_failed", stage }); } catch { /* Logging cannot affect authentication. */ }
+}
+export function reportAccessHeaderPresence(location: "worker" | "app", assertionPresent: boolean): void {
+  if ((location !== "worker" && location !== "app") || typeof assertionPresent !== "boolean") return;
+  try { console.warn("derech_access_diagnostic", { event: "header_presence", location, assertionPresent }); } catch { /* Logging cannot affect authentication. */ }
+}
 
 const MAX_TOKEN_BYTES = 16_384;
 const MAX_JWKS_BYTES = 65_536;
@@ -39,20 +65,29 @@ export async function verifyAccessIdentity(
   config: AccessConfig,
   options: VerifyOptions = {},
 ): Promise<AccessIdentity | null> {
+  let stage: AccessFailureStage = "token_invalid";
+  const fail = (reason: AccessFailureStage): null => {
+    try { options.onFailure?.(reason); } catch { /* Diagnostics cannot grant access or alter denial. */ }
+    return null;
+  };
   try {
-    if (typeof jwt !== "string" || jwt.length === 0 || jwt.length > MAX_TOKEN_BYTES) return null;
+    if (typeof jwt !== "string" || jwt.length === 0 || jwt.length > MAX_TOKEN_BYTES) return fail(jwt === "" ? "token_missing" : "token_invalid");
+    stage = "config_invalid";
     const issuer = canonicalIssuer(config?.issuer);
     const audience = config?.audience;
-    if (!issuer || typeof audience !== "string" || audience.length === 0 || audience.length > 512) return null;
+    if (!issuer || typeof audience !== "string" || audience.length === 0 || audience.length > 512) return fail(stage);
 
+    stage = "token_invalid";
     const parts = jwt.split(".");
-    if (parts.length !== 3 || parts.some((part) => part.length === 0)) return null;
+    if (parts.length !== 3 || parts.some((part) => part.length === 0)) return fail(stage);
     const header = parseJsonPart(parts[0]) as { alg?: unknown; kid?: unknown } | null;
     const claims = parseJsonPart(parts[1]) as AccessClaims | null;
-    if (!header || !claims || header.alg !== "RS256" || !validShortString(header.kid, 256)) return null;
-    if (claims.iss !== issuer || claims.type !== "app" || !hasAudience(claims.aud, audience)) return null;
-    if (!validShortString(claims.sub, 512) || !validEmail(claims.email)) return null;
+    if (!header || !claims || header.alg !== "RS256" || !validShortString(header.kid, 256)) return fail(stage);
+    stage = "claims_invalid";
+    if (claims.iss !== issuer || claims.type !== "app" || !hasAudience(claims.aud, audience)) return fail(stage);
+    if (!validShortString(claims.sub, 512) || !validEmail(claims.email)) return fail(stage);
 
+    stage = "time_invalid";
     const nowSeconds = (options.now?.() ?? Date.now()) / 1000;
     const exp = numericDate(claims.exp);
     const nbf = numericDate(claims.nbf);
@@ -63,24 +98,30 @@ export async function verifyAccessIdentity(
       nbf > nowSeconds + CLOCK_SKEW_SECONDS ||
       iat > nowSeconds + CLOCK_SKEW_SECONDS ||
       exp <= iat || nbf > exp
-    ) return null;
+    ) return fail(stage);
 
+    stage = "jwks_fetch_failed";
     const fetcher = options.fetcher ?? fetch;
     const fetchedAt = options.now?.() ?? Date.now();
     const previouslyCached = jwksCache.get(issuer);
-    let keys = await getJwks(issuer, fetcher, fetchedAt);
+    let keys = await getJwks(issuer, fetcher, fetchedAt, false, () => { stage = "jwks_schema_invalid"; });
     let key = keys.find((item) => item.kid === header.kid);
     if (!key && previouslyCached && previouslyCached.expiresAt > fetchedAt && canRefreshUnknownKid(issuer, fetchedAt)) {
-      keys = await getJwks(issuer, fetcher, fetchedAt, true);
+      stage = "jwks_fetch_failed";
+      keys = await getJwks(issuer, fetcher, fetchedAt, true, () => { stage = "jwks_schema_invalid"; });
       key = keys.find((item) => item.kid === header.kid);
     }
-    if (!key || key.kty !== "RSA" || (key.alg !== undefined && key.alg !== "RS256") ||
+    if (!key) return fail("key_missing");
+    stage = "key_policy_invalid";
+    if (key.kty !== "RSA" || (key.alg !== undefined && key.alg !== "RS256") ||
       (key.use !== undefined && key.use !== "sig") ||
-      (key.key_ops !== undefined && !key.key_ops.includes("verify"))) return null;
+      (key.key_ops !== undefined && !key.key_ops.includes("verify"))) return fail(stage);
 
+    stage = "key_import_failed";
     const publicKey = await crypto.subtle.importKey(
       "jwk", key, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"],
     );
+    stage = "signature_invalid";
     const signature = decodeBase64Url(parts[2]);
     const data = new TextEncoder().encode(`${parts[0]}.${parts[1]}`);
     const signatureBuffer = new ArrayBuffer(signature.byteLength);
@@ -88,7 +129,7 @@ export async function verifyAccessIdentity(
     const dataBuffer = new ArrayBuffer(data.byteLength);
     new Uint8Array(dataBuffer).set(data);
     const verified = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", publicKey, signatureBuffer, dataBuffer);
-    if (!verified) return null;
+    if (!verified) return fail(stage);
 
     const fullName = typeof claims.name === "string" && claims.name.trim().length <= 512
       ? claims.name.trim() || null
@@ -101,7 +142,7 @@ export async function verifyAccessIdentity(
       fullName,
     };
   } catch {
-    return null;
+    return fail(stage);
   }
 }
 
@@ -148,7 +189,7 @@ function parseJsonPart(value: string): unknown {
   return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
 }
 
-async function getJwks(issuer: string, fetcher: typeof fetch, now: number, refresh = false): Promise<AccessKey[]> {
+async function getJwks(issuer: string, fetcher: typeof fetch, now: number, refresh = false, onSchema?: () => void): Promise<AccessKey[]> {
   const cached = jwksCache.get(issuer);
   if (!refresh && cached && cached.expiresAt > now) return cached.keys;
 
@@ -159,6 +200,7 @@ async function getJwks(issuer: string, fetcher: typeof fetch, now: number, refre
     headers: { accept: "application/json" },
   });
   if (!response.ok || response.redirected) throw new Error("JWKS unavailable");
+  onSchema?.();
   const text = await readBounded(response, MAX_JWKS_BYTES);
   const parsed = JSON.parse(text) as { keys?: unknown };
   if (!parsed || !Array.isArray(parsed.keys) || parsed.keys.length === 0 || parsed.keys.length > MAX_JWKS_KEYS) {

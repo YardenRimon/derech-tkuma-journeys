@@ -16,6 +16,7 @@
   "PLATFORM_PUBLIC_ORIGIN":"https://derech-tkuma-review.REPLACE_SUBDOMAIN.workers.dev",
   "PLATFORM_RELEASE_STAGE":"review",
   "CMS_ADAPTER_MODE":"isolated-d1",
+  "CMS_BACKUP_BUCKET_SCOPE":"deployment-isolated",
   "CMS_TENANT_ID":"derech",
   "CMS_SITE_ID":"derech-main",
   "CMS_OWNER_EMAIL":"REPLACE_OWNER_EMAIL"

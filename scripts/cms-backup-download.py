@@ -2,6 +2,10 @@
 """Download a purpose-authenticated CMS snapshot; credentials stay in a private config."""
 import argparse, hashlib, hmac, json, os, pathlib, re, time, urllib.request, urllib.parse
 
+SITES_ORIGIN='https://derech-tkuma-demo-20261016.daring-elf-3029.chatgpt.site'
+CLOUDFLARE_ORIGIN='https://derech-tkuma-review.22yarden22.workers.dev'
+USER_AGENT='DerechCMSBackup/1.0'
+
 def canonical(value): return json.dumps(value,ensure_ascii=False,sort_keys=True,separators=(',',':'))
 def digest(data): return hashlib.sha256(data).hexdigest()
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -10,18 +14,27 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 def download(config_path,output,allow_local=False):
  config_path=pathlib.Path(config_path)
  if config_path.stat().st_mode&0o027: raise ValueError('Credential config must not be group-writable or world-accessible')
- config=json.loads(config_path.read_text());base=urllib.parse.urlsplit(config['url'])
- if base.query or base.fragment or base.username or base.password or (base.scheme!='https' and not(allow_local and base.scheme=='http' and base.hostname in ('127.0.0.1','localhost'))):raise ValueError('Use a fixed HTTPS Site URL')
+ config=json.loads(config_path.read_text())
+ if not isinstance(config,dict) or not all(key in config for key in ('url','secret','scope')):raise ValueError('Backup config requires url, secret and scope')
+ if not isinstance(config['url'],str):raise ValueError('Use an approved backup origin')
+ base=urllib.parse.urlsplit(config['url'])
+ if base.query or base.fragment or base.username or base.password:raise ValueError('Use an approved backup origin')
  if base.path not in ('','/'):raise ValueError('Config URL must identify the Site origin')
+ origin=urllib.parse.urlunsplit((base.scheme,base.netloc,'','',''))
+ local=allow_local and base.scheme=='http' and base.hostname in ('127.0.0.1','localhost')
+ if origin not in (SITES_ORIGIN,CLOUDFLARE_ORIGIN) and not local:raise ValueError('Use an approved backup origin')
+ allowed={'url','secret','scope'}
+ if origin!=CLOUDFLARE_ORIGIN:allowed.add('siteAccessToken')
+ if set(config)-allowed:raise ValueError('Backup config contains unsupported or cross-provider credentials')
  secret=config['secret'];scope=config['scope'];target=urllib.parse.urlunsplit((base.scheme,base.netloc,'/api/backup/','',''))
- if len(secret)<40:raise ValueError('Backup credential is invalid')
+ if not isinstance(secret,str) or len(secret)<40:raise ValueError('Backup credential is invalid')
  output=pathlib.Path(output)
  if output.exists():raise ValueError('Backup output must be a new directory')
  output.mkdir(mode=0o700,parents=False);(output/'media').mkdir(mode=0o700);os.chmod(output,0o700)
  opener=urllib.request.build_opener(NoRedirect())
  def call(operation,extra=None,maximum=22*1024*1024):
   body={'purpose':'cms-backup-v1','operation':operation,'tenantId':scope['tenantId'],'siteId':scope['siteId'],**(extra or {})};raw=canonical(body).encode();stamp=str(int(time.time()));message=f'cms-backup-v1\nPOST\n/api/backup/\n{stamp}\n'.encode()+raw
-  headers={'content-type':'application/json','x-backup-time':stamp,'x-backup-signature':hmac.new(secret.encode(),message,hashlib.sha256).hexdigest()}
+  headers={'content-type':'application/json','user-agent':USER_AGENT,'x-backup-time':stamp,'x-backup-signature':hmac.new(secret.encode(),message,hashlib.sha256).hexdigest()}
   if config.get('siteAccessToken'):headers['OAI-Sites-Authorization']='Bearer '+config['siteAccessToken']
   with opener.open(urllib.request.Request(target,data=raw,headers=headers,method='POST'),timeout=120) as response:
    data=response.read(maximum+1)
@@ -41,5 +54,6 @@ def download(config_path,output,allow_local=False):
  (output/'manifest.json').write_text(canonical(manifest));os.chmod(output/'manifest.json',0o600)
  print(json.dumps({'completed':True,'tables':len(snapshot['tables']),'rows':sum(t['count']for t in snapshot['tables']),'mediaObjects':len(media),'mediaBytes':manifest['mediaTotalBytes'],'snapshotSha256':wrapper['sha256']}))
  return manifest
-if __name__=='__main__':
- parser=argparse.ArgumentParser();parser.add_argument('--config',required=True);parser.add_argument('--output',required=True);parser.add_argument('--allow-local',action='store_true');args=parser.parse_args();download(args.config,args.output,args.allow_local)
+def main(argv=None):
+ parser=argparse.ArgumentParser();parser.add_argument('--config',required=True);parser.add_argument('--output',required=True);parser.add_argument('--allow-local',action='store_true');args=parser.parse_args(argv);return download(args.config,args.output,args.allow_local)
+if __name__=='__main__':main()

@@ -1,6 +1,38 @@
-import{readFileSync}from'node:fs';import{validateCloudflareConfig,resolveReleaseSha}from'./build-cloudflare.mjs';
-const config=JSON.parse(readFileSync(process.argv[2],'utf8'));validateCloudflareConfig(config);const sha=resolveReleaseSha(process.env),origin=config.vars.PLATFORM_PUBLIC_ORIGIN;
-const publicPaths=['/','/robots.txt','/api/health','/admin.css','/wp-includes/js/dist/hooks.min.js'];
-for(const path of publicPaths){const response=await fetch(origin+path,{redirect:'error',signal:AbortSignal.timeout(20000),headers:{'user-agent':'DerechReleaseVerifier/1.0'}});if(response.status!==200||response.headers.get('x-derech-release')!==sha||!response.headers.get('x-robots-tag')?.includes('noindex'))throw new Error('Live release/robots/HTTP mismatch at '+path);if(path==='/api/health'){const health=await response.json();if(health.status!=='ready')throw new Error('Live database health is not ready');}}
-for(const path of['/api/users','/api/tasks','/api/reports']){const response=await fetch(origin+path,{redirect:'manual',signal:AbortSignal.timeout(20000),headers:{'oai-authenticated-user-email':config.vars.CMS_OWNER_EMAIL,'oai-authenticated-user-id':'spoofed-release-test'}});if(![302,303,307,308,401,403].includes(response.status))throw new Error('Unauthenticated/spoofed protected path was not denied: '+path);}
-console.log(JSON.stringify({liveVerified:true,sourceCommit:sha,origin,publicChecks:publicPaths.length,protectedChecks:3,ownerAccessVerified:false,dataMigrationVerified:false}));
+import{readFileSync}from'node:fs';import{createHash}from'node:crypto';import{pathToFileURL}from'node:url';import path from'node:path';
+import{validateCloudflareConfig,resolveReleaseSha}from'./build-cloudflare.mjs';
+export const publicAssetPaths=['/wp-content/uploads/2025/08/לוגו-דרך-התקומה-1024x206.webp','/wp-includes/js/dist/hooks.min.js'];
+const digest=bytes=>createHash('sha256').update(bytes).digest('hex');
+export class LiveVerificationError extends Error{constructor(checks){super('Cloudflare live verification failed: '+JSON.stringify(checks));this.checks=checks;}}
+function failure(check,reason,transient=false){return{...check,passed:false,reason,transient};}
+async function readBounded(response,limit){const reader=response.body?.getReader(),chunks=[];let size=0;if(reader)for(;;){const{done,value}=await reader.read();if(done)break;size+=value.length;if(size>limit){await reader.cancel();throw new Error('body_bound');}chunks.push(Buffer.from(value));}return Buffer.concat(chunks);}
+export async function verifyCloudflareLive({origin,sha,ownerEmail,accessIssuer,manifest,release,fetcher=fetch,wait=ms=>new Promise(resolve=>setTimeout(resolve,ms)),now=Date.now,maxAttempts=6,maxWaitMs=60000,onRetry=()=>{}}){
+ const assets=new Map(manifest.files.map(file=>['/'+file.path,file]));for(const name of publicAssetPaths)if(!assets.has(name))throw new Error('Public probe asset is absent from the source manifest: '+name);
+ const publicPaths=['/','/robots.txt','/api/health',...publicAssetPaths],deadline=now()+maxWaitMs;let last=[];
+ async function probe(name,protectedApi=false){
+  let check={path:name};const remaining=deadline-now();if(remaining<=0)return failure(check,'verification_deadline',true);
+  try{const response=await fetcher(new URL(name,origin).href,{redirect:'manual',signal:AbortSignal.timeout(Math.max(1,Math.min(15000,remaining))),headers:{'user-agent':'DerechReleaseVerifier/1.0',...(protectedApi?{'oai-authenticated-user-email':ownerEmail,'oai-authenticated-user-id':'spoofed-release-test'}:{})}});
+   check={...check,status:response.status,contentType:response.headers.get('content-type'),release:response.headers.get('x-derech-release'),robots:response.headers.get('x-robots-tag')};
+   const location=response.headers.get('location');if(location){try{const target=new URL(location,origin);check.redirectOrigin=target.origin;check.redirectPath=target.pathname;}catch{check.redirectOrigin='invalid';}}
+   if(protectedApi){await response.body?.cancel();if([401,403].includes(response.status)||(response.status>=300&&response.status<400&&check.redirectOrigin===accessIssuer&&check.redirectPath?.startsWith('/cdn-cgi/access/login/')))return{...check,passed:true};return failure(check,'spoofed_protected_request_not_denied',response.status>=500);}
+   if(response.status!==200){await response.body?.cancel();return failure(check,'public_http_status',[404,408,429,500,502,503,504,520,521,522,523,524].includes(response.status));}
+   // A stale/missing release may be edge propagation. Current-release safety/fidelity failures are never retried away.
+   if(check.release!==sha){await response.body?.cancel();return failure(check,'release_not_propagated',true);}
+   if(!check.robots?.includes('noindex')){await response.body?.cancel();return failure(check,'current_release_missing_noindex');}
+   const asset=publicAssetPaths.includes(name)?assets.get(name):null,body=await readBounded(response,asset?asset.bytes+1:name==='/'?2000000:16384);check.bytes=body.length;check.bodySha256=digest(body);
+   if(asset){if(body.length!==asset.bytes||check.bodySha256!==asset.sha256)return failure(check,'static_manifest_mismatch');if(name.endsWith('.webp')?!check.contentType?.startsWith('image/webp'):!check.contentType?.includes('javascript'))return failure(check,'static_mime_mismatch');}
+   else if(name==='/'){const text=body.toString('utf8'),tags=text.match(/<meta\b[^>]*>/gi)??[];if(!check.contentType?.includes('text/html')||!tags.some(tag=>/name=["']robots["']/i.test(tag)&&/content=["'][^"']*noindex/i.test(tag))||!/<script\b[^>]*src=["']\/__pilot__\/guard\.js["']/i.test(text))return failure(check,'review_html_guard_or_robots_mismatch');}
+   else if(name==='/robots.txt'){const expected=assets.get(name);if(!check.contentType?.includes('text/plain')||!/^User-agent:\s*\*/mi.test(body.toString('utf8'))||!/^Allow:\s*\//mi.test(body.toString('utf8'))||(expected&&(body.length!==expected.bytes||check.bodySha256!==expected.sha256)))return failure(check,'robots_body_mismatch');}
+   else{let health;try{health=JSON.parse(body.toString('utf8'));}catch{return failure(check,'health_json_invalid');}if(health.status!=='ready'||health.mode!=='review'||health.contentRelease!==release.contentRelease||health.pages!==release.pages||health.database!==true||health.mediaBinding!==true)return failure(check,'health_readiness_or_source_mismatch');}
+   return{...check,passed:true};
+  }catch(error){return failure(check,error.message==='body_bound'?'response_body_bound':`network_${error.name??'Error'}`,error.message!=='body_bound');}
+ }
+ for(let attempt=1;attempt<=maxAttempts;attempt++){
+  const publicChecks=await Promise.all(publicPaths.map(name=>probe(name)));let checks=publicChecks;
+  if(publicChecks.every(check=>check.passed))checks=[...publicChecks,...await Promise.all(['/api/users','/api/tasks','/api/reports'].map(name=>probe(name,true)))];
+  last=checks;const failures=checks.filter(check=>!check.passed);if(!failures.length)return{liveVerified:true,sourceCommit:sha,origin,attempts:attempt,publicChecks:publicPaths.length,protectedChecks:3,checks,accessGatedAssetsExcluded:['/admin.css','/admin.js'],ownerAccessVerified:false,dataMigrationVerified:false};
+  if(failures.some(check=>!check.transient)||attempt===maxAttempts||now()>=deadline)throw new LiveVerificationError(checks);
+  onRetry({attempt,failures});await wait(Math.min(1000*2**(attempt-1),8000,Math.max(0,deadline-now())));
+ }
+ throw new LiveVerificationError(last);
+}
+if(process.argv[1]&&pathToFileURL(path.resolve(process.argv[1])).href===import.meta.url){try{const config=JSON.parse(readFileSync(process.argv[2],'utf8'));validateCloudflareConfig(config);const result=await verifyCloudflareLive({origin:config.vars.PLATFORM_PUBLIC_ORIGIN,sha:resolveReleaseSha(process.env),ownerEmail:config.vars.CMS_OWNER_EMAIL,accessIssuer:config.vars.CF_ACCESS_ISSUER,manifest:JSON.parse(readFileSync(new URL('../public-assets-manifest.json',import.meta.url))),release:JSON.parse(readFileSync(new URL('../lib/site-release.json',import.meta.url))),onRetry:diagnostic=>console.error(JSON.stringify({waitingForPropagation:diagnostic}))});console.log(JSON.stringify(result));}catch(error){console.error(error.message);process.exitCode=1;}}
