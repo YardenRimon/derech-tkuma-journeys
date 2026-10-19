@@ -1,3 +1,4 @@
+import { env } from "cloudflare:workers";
 import { authorizeCmsUser, CmsError } from "@/lib/access";
 import { requireSameOrigin, jsonError, getD1 } from "@/lib/cms";
 import { Tasks, TaskError, taskId, type TaskActor, type TaskReceipt } from "@/lib/task-core";
@@ -14,7 +15,7 @@ export async function GET(request: Request) {
    if (!actor.isAdmin) throw new CmsError(403, "סנכרון משימות מחייב הרשאת מנהל");
    return send({ authority: "platform-work-items", scope, commands: (await store.commands(scope)).filter(x=>x.state === "pending") });
   }
-  if (!id) return send({ records: await store.list(scope, actor), authority: "platform-work-items", syncMode: "manual-gateway" });
+  if (!id) return send({ records: await store.list(scope, actor), authority: "platform-work-items", syncMode: (env as unknown as {CMS_EXECUTION_SECRET?:string}).CMS_EXECUTION_SECRET ? "server-gateway-configured" : "manual-gateway" });
   const record = await service.readable(scope, actor, taskId(id));
   return send({ record, commands: await store.commands(scope,id), history: await store.history(scope,id) });
  } catch (error) { return failure(error); }
