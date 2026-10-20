@@ -1,0 +1,195 @@
+{
+  "version": 1,
+  "format": "gzip-json-utf8",
+  "routeCount": 37,
+  "payloadSha256": "cae96d53a12d435e4095ce1081b24b2e7a11fd4faf59dfe07f1067203a3f2462",
+  "payloadBytes": 19970352,
+  "packedSha256": "3bcb591eb97140136ae00d246d8e612fce826e1fb209746574ee3a6653217f07",
+  "sources": {
+    "/": {
+      "fixture": "current-8a5edab282632443219e.html.gz",
+      "sourceSha256": "39358c204c54159d5a1a6f98717f049ecd06c4afc11dfeb16b6d04f5ec13fcec",
+      "fixtureSha256": "83b2c9cc7bf3878d555550d11e011cb1c9029b9c0632243bc16bfa078e83852b"
+    },
+    "/maslulim/נקודות-החיבור/": {
+      "fixture": "current-c44785a5b82deacea146.html.gz",
+      "sourceSha256": "4cf911ecfac8e54e85608806fa7305da43fd25b28182ea0f3e3d5cb48a369f48",
+      "fixtureSha256": "76796c252e5e1b2f5918c13257954ba896d5d55f42a446d0f34d6a238ec6854f"
+    },
+    "/maslulim/עוז-מול-תופת/": {
+      "fixture": "current-4b9e2929e8256330599a.html.gz",
+      "sourceSha256": "4d9f41aefad0669b43b4ea023305d1d3da9a4234c1bf4beb1ceec3cb5184db3c",
+      "fixtureSha256": "33ea184058af98d99356d0cc1ffed822fe1c8648e174f1985a31026c0b507ccd"
+    },
+    "/maslulim/קו-המגע/": {
+      "fixture": "current-c08846a32d86f378b4b6.html.gz",
+      "sourceSha256": "720ab3adf1875f44a2348b6693ed3a95bf98d9f9d3cf98d472e403af98d3b2b5",
+      "fixtureSha256": "dde8f42b4f398e86055db7ed3b118c784227b2ea69260a37f40134040506a953"
+    },
+    "/אודותינו/": {
+      "fixture": "current-0516456c898113e7864a.html.gz",
+      "sourceSha256": "1d079ee552815d62f3c8306973ab149aaa5922ce23f27c7e3192c609e7a6ea2c",
+      "fixtureSha256": "d24d8c90753255c11f9066e2a70040305b7d225cd1da251998f4c6e96b123da1"
+    },
+    "/גבעת-התצפתניות/": {
+      "fixture": "current-fb2738f72d8481dfae18.html.gz",
+      "sourceSha256": "a36cb8342068fb48655737c38fa78a0d9f25741faf43cdf166934e360730cceb",
+      "fixtureSha256": "b5028c4279f3468dc10f54360c51526809e5a88f4a3a6920af34d351164a33ba"
+    },
+    "/הבלוג/": {
+      "fixture": "current-477fc0ef05d8c2bb8ea4.html.gz",
+      "sourceSha256": "fe8108bb0fada4252bd75fa8d7ba87c349518f6fa0fcfe0a6e8e03d17b472ff5",
+      "fixtureSha256": "066897dfd0b32ced1f94de93dfa5e23a7d8dea90d175ed67c715b1786e5fc234"
+    },
+    "/המדריכים/": {
+      "fixture": "current-a2cef1303c2ea2b6f3cc.html.gz",
+      "sourceSha256": "8dccd03ed35a905b46cc2073f0bc6cde8ec8de2803611948aedbef6f49550f07",
+      "fixtureSha256": "db6903e03fd431fda435c4df06881cc970ed74947b5a158c3ff6889ccb2ff9b4"
+    },
+    "/המסלולים/": {
+      "fixture": "current-b20b11a5106e5170b722.html.gz",
+      "sourceSha256": "9bf10ac5389e8c3fa16e3192046312e45508482b416510cc4012ca29694f0ac6",
+      "fixtureSha256": "0a45809c8317d198157715462e381c2bbe9dad1c9f108b07849ed938393bcceb"
+    },
+    "/התצפיות/": {
+      "fixture": "current-ab7bfeda0f495a721ef1.html.gz",
+      "sourceSha256": "9cd9121db0ad72148c9b2dcb063e75555438e04d02939f5bf2635e30b442eab9",
+      "fixtureSha256": "22a41990de6aefedec08c23124f724e988e7e2eb54c2e581a1da095cfe757740"
+    },
+    "/מסע-עוטף/": {
+      "fixture": "current-5914bce5cd801793143b.html.gz",
+      "sourceSha256": "0ca597627b778b4a6771a5335f3583c7386cc263f71cad1f18c92affd5dfff76",
+      "fixtureSha256": "0e4af0f2c99605b271b60ffdf69439b3edc292732ed8d31a68e774fc76432085"
+    },
+    "/מפת-האתר/": {
+      "fixture": "current-7fb9dfeb86b59a4ad93a.html.gz",
+      "sourceSha256": "0c545aea91c01639046b0839319df1f3d0412c35d4ae980d8953e2dda44e50ca",
+      "fixtureSha256": "f28fa617817543994ff8d0069fcbe06871835a712c12bbf730ec9550161ac312"
+    },
+    "/מצפה-כרם-שלום/": {
+      "fixture": "current-9fe50231ed4a2e6d22bf.html.gz",
+      "sourceSha256": "63455bb70d4b1109632a75a3d8e5b0416df61a5f66c891040b8a27f9868b4f9a",
+      "fixtureSha256": "832826bfe6a392c8ad4935fbbab8b1ff87887a6ee43fe0ff7a58a44d68d8c886"
+    },
+    "/מצפה-נירים/": {
+      "fixture": "current-841b0ddcf1353dafbcff.html.gz",
+      "sourceSha256": "edad4237fca058c6fe9a6bcf9a680b9c42f88155271b54fa2fcb075cbad9e7c2",
+      "fixtureSha256": "8de7911fd7b12d7b3300c5877b5ff025c628bc6d5fe757be171e2a05a437ca57"
+    },
+    "/סיורים/": {
+      "fixture": "current-16dce46e8b1c86407955.html.gz",
+      "sourceSha256": "93d6a08c4ff7f96cd3686c15df6dea42496ebd12c64d0da4c8a080e34be3a2ce",
+      "fixtureSha256": "0e6484d736a9162ce9daedd7ed21038a296b1fdc4f7705fa8ef1ab92e07d1dd5"
+    },
+    "/שאלות-נפוצות-נקודות-תצפית-בעוטף-עזה/": {
+      "fixture": "current-386a546c27f592ef8566.html.gz",
+      "sourceSha256": "13118ea9eb1124e84390f9ebc0721835b77a24c9d7ed04b1a31094df065013c7",
+      "fixtureSha256": "77429b0b9cc54c5bdb7af0d01f79cd49fbd761455ce356ab085206232ccbe2b6"
+    },
+    "/שאלות-תשובות-דרך-התקומה/": {
+      "fixture": "current-51cd9aeb0775c30f30a5.html.gz",
+      "sourceSha256": "a52cd0c736e1bc9dd1e1b8a8988cb3969744221482d1a1765de89c80ae6dc7ea",
+      "fixtureSha256": "d9c4fb22dcdf6429dfeb9f2735e7f17b5652257e9038a387d3cf0593914db273"
+    },
+    "/maslulim/": {
+      "fixture": "current-d651c0dcc3428fdc734f.html.gz",
+      "sourceSha256": "a5232de20f2fb883ef41173081a12565092a33dde470e4b93665d7ab88b05a4a",
+      "fixtureSha256": "d31d86d71388d49733a6a08bef9b727696342c2f81086d1748b606afaa05a0e1"
+    },
+    "/אטרקציות-בעוטף-המדריך-המלא-לחוויות/": {
+      "fixture": "current-ac102a5f6545688de5ef.html.gz",
+      "sourceSha256": "02355a19103531a921f5bc92a317605f978dfd41a7b0a152a7210a887ecd6b88",
+      "fixtureSha256": "e826bc570084f3ce78310ee9cdb6dab367bc75f465efe8bbf244fcabbdadd7c2"
+    },
+    "/הצעה/": {
+      "fixture": "current-5b0b2590974c72e3d812.html.gz",
+      "sourceSha256": "33ed0a61d91c069cffec9c69db8411e5a5cdbb54e5a7703a37a83c2df5d883a1",
+      "fixtureSha256": "e94b5b0b2dd89edb4860b2f3a5d7968cb8bfcfd786c2225540550c30f42805b6"
+    },
+    "/טיולים-בעוטף-עזה-להכיר-את-המרחב-דרך-ח/": {
+      "fixture": "current-f7ed81bd37483e9df17b.html.gz",
+      "sourceSha256": "d922ff5936cda7b2188d743e4a22bb17c3f0a376629b6bd47c86ea762e9c0c80",
+      "fixtureSha256": "422c6ad6b5c986ff367e7b70f33209fcbf96532434f0849cb29c453a37b269fa"
+    },
+    "/טיולים-עם-ילדים-בדרום-ובעוטף-עזה-חוויה/": {
+      "fixture": "current-36ea13d26d28d7d9e144.html.gz",
+      "sourceSha256": "17090e00090d2ddf6dec37621602aae031487bb5a4c3d423372ed15550032d5f",
+      "fixtureSha256": "fd62e170eb46f8158a145bdb0d8c672093cf5af99e562044facf51f59431a836"
+    },
+    "/מדריך-לסיור-בעוטף-עזה-כך-תבחרו-את-החו/": {
+      "fixture": "current-6635fd8005291164a3a4.html.gz",
+      "sourceSha256": "a09d753f80c8b148ac5c67acf588d8a501cb207b5d82b1db74fa829c830e1c34",
+      "fixtureSha256": "e1889d7f7986fb59be622cc4a47322ccd78e332cd5a457f8584b738725a82a98"
+    },
+    "/מסלול-נקודות-החיבור/": {
+      "fixture": "current-7b59f29613d58c2c7fc4.html.gz",
+      "sourceSha256": "94f50c72d2cad9086302ec49257f7a031ea3d74da8a116799df776584b2d75ff",
+      "fixtureSha256": "f6dbefae0670b4db1a962aab97950bb0cd4ab2e15e6c6f746f2e809163d9e769"
+    },
+    "/מסלול-עוז-מול-תופת/": {
+      "fixture": "current-178c2f476514068fc7e0.html.gz",
+      "sourceSha256": "c591a8c6813922eb787d75d9c763c2bcf7afa01cb959b4bd57306ef9882254bb",
+      "fixtureSha256": "be453b39e0c4a3070b34b4105e8201a41dd7283fda68ea6fb007b993f0329ea4"
+    },
+    "/מסלול-קו-המגע/": {
+      "fixture": "current-6ee5878108f2d751175a.html.gz",
+      "sourceSha256": "602440be3bd99cc2884fdaddf90509e5cfdcdd3155445da140a0f8aca73d8529",
+      "fixtureSha256": "95843594eeefb7685b1f22b15262ef7226b36c1b0ec6f0c11cccc2a78724e891"
+    },
+    "/סיור-באתר-הנובה-להבין-את-מה-שקרה-דרך-ה/": {
+      "fixture": "current-999935f1f97211c3c724.html.gz",
+      "sourceSha256": "bd933d9751cd62c8c0752cc023526eaf0c50aeb47a6aa511f31908939a6cc8f4",
+      "fixtureSha256": "5dd518f482801f904529a5b7f3300c92f85abaf3122df633b60a784fd345e429"
+    },
+    "/סיור-בקיבוצי-העוטף-לחוות-להבין-ולהת/": {
+      "fixture": "current-b8f16f91881e78e5fb80.html.gz",
+      "sourceSha256": "c107d0cab5823dc0461de579c4eb819345c84f4c761d5c07eb1492bef6ce9d0c",
+      "fixtureSha256": "4fbc8061f8f1f96524f0a61a5fef2ad5dc0baef37660449dde3bfe1793603a5f"
+    },
+    "/סיור-וביקור-בבארי-נחל-עוז-וכפר-עזה-לה/": {
+      "fixture": "current-8865f3d8001e01d0ba37.html.gz",
+      "sourceSha256": "483f8e43ec692efe05a3fe66067b55044fc8093df704ba6aadfdefb15716963b",
+      "fixtureSha256": "d65a11c51c2c5b67ed28b397ff875cb84682f1376439a9bc312c815dae4c6e73"
+    },
+    "/סיור-מודרך-בעוטף-עזה-מלחמת-חרבות-ברזל/": {
+      "fixture": "current-e627e3b7aad50c28ff51.html.gz",
+      "sourceSha256": "58624c383670d629b31f343e506f7b87a5ebffab592502cd53fbc1271d059e05",
+      "fixtureSha256": "2fe25a2b2336c8ccd39a0e34f915bc890bb770da2bec4610fc98e926f82069e7"
+    },
+    "/סיורים-בעוטף-עזה-בעקבות-המלחמה/": {
+      "fixture": "current-69fa32601c316d2d85a7.html.gz",
+      "sourceSha256": "0d55158f91f0630cd0f989030a7dd2d6c138234d4e95791f6d09a5bd5259c0d5",
+      "fixtureSha256": "de5eeba32ade0bccd1c3d254a712e6c8797d1acd70b3c0d5bb74fea17d8af792"
+    },
+    "/סיורים-לעוטף-עזה-לצוות-מורים-ותלמידים/": {
+      "fixture": "current-55a54cd6b7050f23df00.html.gz",
+      "sourceSha256": "1541109cfd9f7a7570b1a8faad3b243660e18ca2a884e7b257bf9fef065d630e",
+      "fixtureSha256": "0703c2dfdc917d902539113f2af80c159e18547569071f8e05574c1901b76840"
+    },
+    "/refund_returns/": {
+      "fixture": "current-a8f246762b4357a94fbe.html.gz",
+      "sourceSha256": "5e28a58d450d2daa2a2febbc21e35bde734f3b2f3bb17ba91b6930350b55feb9",
+      "fixtureSha256": "e23545e10e1ce0a73f1986aa7357f93977bfeabfa4b86ef85d8c06be04585436"
+    },
+    "/הבלוג/2/": {
+      "fixture": "current-72916194f3240508a74d.html.gz",
+      "sourceSha256": "4bcc2426cf360f79bde6bf96321fd6cbb1267b2570cad619669267cc1b3ef88f",
+      "fixtureSha256": "a7adac92f9d511abdb3c9ed8004a2359864536f116eeb8828a77d47cb01e3f12"
+    },
+    "/מדיניות-פרטיות/": {
+      "fixture": "current-8e66a3eb56033bd7de9b.html.gz",
+      "sourceSha256": "c063f27bae1d72a76c70e3ac1dae769fd05904fc7af14e1514f8e43829c26130",
+      "fixtureSha256": "d379bdd2ce763337b3ea46ef8111328911520129b3b7c0bc4b31320ef29fba03"
+    },
+    "/תקנון-אתר/": {
+      "fixture": "current-38b0c83d54f7f2d908f9.html.gz",
+      "sourceSha256": "6d1c15de5073ddee44aaeb7feb377bdeb93631d8a1548e7e97c3bf7df0bf0a6d",
+      "fixtureSha256": "5d832f413694c1faf9c62c563cd1b2044a8192ca54194472e557f291fe7ddab0"
+    },
+    "/thanks/": {
+      "fixture": "current-3c750b005b4e7f294a20.html.gz",
+      "sourceSha256": "6eb2b9880e488bed43ec618d5334c59e4c90c01e511a264831476c0f90bbf1ab",
+      "fixtureSha256": "db8caf26714a05da754b6adbad902ad0043e3e7dcde526f2845f912a22a1e55e"
+    }
+  }
+}

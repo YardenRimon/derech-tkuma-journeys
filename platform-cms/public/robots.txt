@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+# Public review demo: all HTML sends noindex,nofollow,noarchive.

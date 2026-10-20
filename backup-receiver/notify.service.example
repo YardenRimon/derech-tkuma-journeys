@@ -1,0 +1,25 @@
+# PROPOSAL ONLY: /etc/systemd/system/yarden-cms-backup-notify@.service
+[Unit]
+Description=Owner-only scoped CMS backup notice (%i)
+After=docker.service yarden-cms-backup.service
+
+[Service]
+Type=oneshot
+User=root
+UMask=0077
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/usr/bin/python3 /opt/yarden-cms-backup/notify.py --event %i
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+InaccessiblePaths=/etc/yarden-cms-backup.json /etc/yarden-cms-backup-upload.json /etc/yarden-answer-cms.json /etc/yarden-site-monitor.json
+ReadOnlyPaths=/opt/yarden-site-monitor /opt/yarden-time-policy /var/lib/yarden-cms-backup
+RestrictAddressFamilies=AF_UNIX
+CapabilityBoundingSet=
+TimeoutStartSec=60
+
+# Add to existing yarden-cms-backup.service [Unit], after review:
+# OnFailure=yarden-cms-backup-notify@failure.service
+# OnSuccess=yarden-cms-backup-notify@success.service
+# No independent timer, sender, poller, provider token or API key is added.

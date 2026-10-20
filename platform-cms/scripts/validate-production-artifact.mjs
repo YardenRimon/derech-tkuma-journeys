@@ -1,0 +1,10 @@
+import {readFileSync,existsSync} from 'node:fs';
+import {productionBuildInput} from './build-production.mjs';
+const {config,profile,sourceCommit,profileSha256}=productionBuildInput(process.env),built=JSON.parse(readFileSync(new URL('../dist-production/server/wrangler.json',import.meta.url),'utf8'));
+for(const key of ['name','account_id','workers_dev','preview_urls'])if(built[key]!==config[key])throw new Error('Production artifact target mismatch: '+key);
+for(const [name,keys]of [['routes',['pattern','zone_name']],['d1_databases',['binding','database_id','database_name']],['r2_buckets',['binding','bucket_name']]]){if(built[name]?.length!==config[name]?.length||config[name].some((item,index)=>keys.some(key=>built[name][index][key]!==item[key])))throw new Error('Production artifact binding/route mismatch: '+name);}
+for(const key of ['PLATFORM_RELEASE_STAGE','PLATFORM_PUBLIC_ORIGIN','PLATFORM_AUTH_MODE','PLATFORM_AUTH_SUPABASE_URL','PLATFORM_AUTH_ORIGIN','PLATFORM_AUTH_REQUIRE_MFA','CMS_TENANT_ID','CMS_SITE_ID'])if(built.vars?.[key]!==config.vars[key])throw new Error('Production artifact scope mismatch: '+key);
+if(built.vars?.DERECH_PRODUCTION_PROFILE_SHA256!==profileSha256)throw new Error('Production artifact owner-profile digest mismatch');
+for(const name of ['production-visitor.js','production-guard.js','consent-state.js','measurement-frame.js','visitor-policy.js'])if(!readFileSync(new URL('../dist-production/client/'+name,import.meta.url)).equals(readFileSync(new URL('../public/'+name,import.meta.url))))throw new Error('Production visitor artifact bytes mismatch: '+name);
+if(built.vars?.PLATFORM_RELEASE_SHA!==sourceCommit||built.assets?.run_worker_first!==true||built.assets?.binding!=='ASSETS'||!existsSync(new URL('../dist-production/server/index.js',import.meta.url)))throw new Error('Production artifact provenance or worker-first boundary missing');
+console.log(JSON.stringify({validated:true,production:true,sourceCommit,profileSha256,approvalReceiptHash:profile.approvalReceiptHash,deployExecuted:false}));

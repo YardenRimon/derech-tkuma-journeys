@@ -1,0 +1,896 @@
+{
+  "version": 1,
+  "sourceCapturedAt": "2026-10-19T14:23:11.773970+00:00",
+  "records": [
+    {
+      "kind": "tour",
+      "id": "route-points",
+      "content": {
+        "title": "נקודות החיבור",
+        "slug": "נקודות-החיבור",
+        "sourcePath": "/maslulim/נקודות-החיבור/",
+        "description": "מסלול תמציתי וממוקד שמביא את הסיפור בשלוש תחנות עוצמתיות",
+        "image": "/wp-content/uploads/2025/09/WhatsApp-Image-2025-09-10-at-09.32.02-1024x566.jpeg",
+        "imageAlt": ""
+      },
+      "provenance": {
+        "sourceUrl": "https://derech-tkuma.com/maslulim/%d7%a0%d7%a7%d7%95%d7%93%d7%95%d7%aa-%d7%94%d7%97%d7%99%d7%91%d7%95%d7%a8/",
+        "sourceHash": "4cf911ecfac8e54e85608806fa7305da43fd25b28182ea0f3e3d5cb48a369f48",
+        "capturedAt": "2026-10-19T14:21:07.930664+00:00",
+        "canonical": "https://derech-tkuma.com/maslulim/נקודות-החיבור/"
+      },
+      "unknownFields": []
+    },
+    {
+      "kind": "tour",
+      "id": "route-oz",
+      "content": {
+        "title": "עוז מול תופת",
+        "slug": "עוז-מול-תופת",
+        "sourcePath": "/maslulim/עוז-מול-תופת/",
+        "description": "",
+        "image": "/wp-content/uploads/2025/09/untitled-67-1024x567.jpg",
+        "imageAlt": "דרך התקומה סיורים והדרכות בעוטף"
+      },
+      "provenance": {
+        "sourceUrl": "https://derech-tkuma.com/maslulim/%d7%a2%d7%95%d7%96-%d7%9e%d7%95%d7%9c-%d7%aa%d7%95%d7%a4%d7%aa/",
+        "sourceHash": "4d9f41aefad0669b43b4ea023305d1d3da9a4234c1bf4beb1ceec3cb5184db3c",
+        "capturedAt": "2026-10-19T14:21:09.515997+00:00",
+        "canonical": "https://derech-tkuma.com/maslulim/עוז-מול-תופת/"
+      },
+      "unknownFields": []
+    },
+    {
+      "kind": "tour",
+      "id": "route-contact",
+      "content": {
+        "title": "קו המגע",
+        "slug": "קו-המגע",
+        "sourcePath": "/maslulim/קו-המגע/",
+        "description": "",
+        "image": "/wp-content/uploads/2025/09/DJI_000312.7.25-1-1-1024x575.jpeg",
+        "imageAlt": ""
+      },
+      "provenance": {
+        "sourceUrl": "https://derech-tkuma.com/maslulim/%d7%a7%d7%95-%d7%94%d7%9e%d7%92%d7%a2/",
+        "sourceHash": "720ab3adf1875f44a2348b6693ed3a95bf98d9f9d3cf98d472e403af98d3b2b5",
+        "capturedAt": "2026-10-19T14:21:11.050397+00:00",
+        "canonical": "https://derech-tkuma.com/maslulim/קו-המגע/"
+      },
+      "unknownFields": []
+    },
+    {
+      "kind": "tour",
+      "id": "open-tour",
+      "content": {
+        "title": "סיור פתוח - הרשמה כאן",
+        "slug": "סיורים",
+        "sourcePath": "/סיורים/",
+        "description": "",
+        "image": "",
+        "imageAlt": ""
+      },
+      "provenance": {
+        "sourceUrl": "https://derech-tkuma.com/%d7%a1%d7%99%d7%95%d7%a8%d7%99%d7%9d/",
+        "sourceHash": "93d6a08c4ff7f96cd3686c15df6dea42496ebd12c64d0da4c8a080e34be3a2ce",
+        "capturedAt": "2026-10-19T14:21:27.949051+00:00",
+        "canonical": "https://derech-tkuma.com/סיורים/"
+      },
+      "unknownFields": [
+        "image",
+        "imageAlt"
+      ]
+    },
+    {
+      "kind": "occurrence",
+      "id": "source-product-7844",
+      "content": {
+        "tourId": "open-tour",
+        "title": "סיור בעוטף ביום שישי",
+        "date": "2026-10-16",
+        "dateLabel": "16/10/26",
+        "startsAt": null,
+        "endsAt": null,
+        "timezone": "Asia/Jerusalem",
+        "meetingPoint": "",
+        "priceMinor": 17000,
+        "currency": "ILS",
+        "capacity": null,
+        "note": ""
+      },
+      "provenance": {
+        "sourceUrl": "https://derech-tkuma.com/%d7%a1%d7%99%d7%95%d7%a8%d7%99%d7%9d/",
+        "sourceHash": "93d6a08c4ff7f96cd3686c15df6dea42496ebd12c64d0da4c8a080e34be3a2ce",
+        "capturedAt": "2026-10-19T14:21:27.949051+00:00",
+        "canonical": "https://derech-tkuma.com/סיורים/",
+        "productId": "7844",
+        "dateLiteral": "16/10/26",
+        "priceLiteral": "170.00"
+      },
+      "unknownFields": [
+        "startsAt",
+        "endsAt",
+        "capacity",
+        "meetingPoint"
+      ],
+      "cardSelector": ".e-loop-item-7844"
+    },
+    {
+      "kind": "occurrence",
+      "id": "source-product-7920",
+      "content": {
+        "tourId": "open-tour",
+        "title": "סיור בעוטף ביום ראשון צהריים",
+        "date": "2026-10-18",
+        "dateLabel": "18/10/26",
+        "startsAt": null,
+        "endsAt": null,
+        "timezone": "Asia/Jerusalem",
+        "meetingPoint": "",
+        "priceMinor": 17000,
+        "currency": "ILS",
+        "capacity": null,
+        "note": ""
+      },
+      "provenance": {
+        "sourceUrl": "https://derech-tkuma.com/%d7%a1%d7%99%d7%95%d7%a8%d7%99%d7%9d/",
+        "sourceHash": "93d6a08c4ff7f96cd3686c15df6dea42496ebd12c64d0da4c8a080e34be3a2ce",
+        "capturedAt": "2026-10-19T14:21:27.949051+00:00",
+        "canonical": "https://derech-tkuma.com/סיורים/",
+        "productId": "7920",
+        "dateLiteral": "18/10/26",
+        "priceLiteral": "170.00"
+      },
+      "unknownFields": [
+        "startsAt",
+        "endsAt",
+        "capacity",
+        "meetingPoint"
+      ],
+      "cardSelector": ".e-loop-item-7920"
+    },
+    {
+      "kind": "occurrence",
+      "id": "source-product-7681",
+      "content": {
+        "tourId": "open-tour",
+        "title": "סיור בעוטף ביום שלישי",
+        "date": "2026-10-20",
+        "dateLabel": "20/10/26",
+        "startsAt": null,
+        "endsAt": null,
+        "timezone": "Asia/Jerusalem",
+        "meetingPoint": "",
+        "priceMinor": 24900,
+        "currency": "ILS",
+        "capacity": null,
+        "note": "סיור כולל הסעה - איסוף והחזרה מרכבת שדרות"
+      },
+      "provenance": {
+        "sourceUrl": "https://derech-tkuma.com/%d7%a1%d7%99%d7%95%d7%a8%d7%99%d7%9d/",
+        "sourceHash": "93d6a08c4ff7f96cd3686c15df6dea42496ebd12c64d0da4c8a080e34be3a2ce",
+        "capturedAt": "2026-10-19T14:21:27.949051+00:00",
+        "canonical": "https://derech-tkuma.com/סיורים/",
+        "productId": "7681",
+        "dateLiteral": "20/10/26",
+        "priceLiteral": "249.00"
+      },
+      "unknownFields": [
+        "startsAt",
+        "endsAt",
+        "capacity",
+        "meetingPoint"
+      ],
+      "cardSelector": ".e-loop-item-7681"
+    },
+    {
+      "kind": "occurrence",
+      "id": "source-product-7899",
+      "content": {
+        "tourId": "open-tour",
+        "title": "סיור בעוטף ביום שישי",
+        "date": "2026-10-23",
+        "dateLabel": "23/10/2026",
+        "startsAt": null,
+        "endsAt": null,
+        "timezone": "Asia/Jerusalem",
+        "meetingPoint": "",
+        "priceMinor": 17000,
+        "currency": "ILS",
+        "capacity": null,
+        "note": ""
+      },
+      "provenance": {
+        "sourceUrl": "https://derech-tkuma.com/%d7%a1%d7%99%d7%95%d7%a8%d7%99%d7%9d/",
+        "sourceHash": "93d6a08c4ff7f96cd3686c15df6dea42496ebd12c64d0da4c8a080e34be3a2ce",
+        "capturedAt": "2026-10-19T14:21:27.949051+00:00",
+        "canonical": "https://derech-tkuma.com/סיורים/",
+        "productId": "7899",
+        "dateLiteral": "23/10/2026",
+        "priceLiteral": "170.00"
+      },
+      "unknownFields": [
+        "startsAt",
+        "endsAt",
+        "capacity",
+        "meetingPoint"
+      ],
+      "cardSelector": ".e-loop-item-7899"
+    },
+    {
+      "kind": "occurrence",
+      "id": "source-product-7882",
+      "content": {
+        "tourId": "open-tour",
+        "title": "סיור בעוטף ביום שלישי",
+        "date": "2026-10-27",
+        "dateLabel": "27/10/26",
+        "startsAt": null,
+        "endsAt": null,
+        "timezone": "Asia/Jerusalem",
+        "meetingPoint": "",
+        "priceMinor": 17000,
+        "currency": "ILS",
+        "capacity": null,
+        "note": "יום בחירות"
+      },
+      "provenance": {
+        "sourceUrl": "https://derech-tkuma.com/%d7%a1%d7%99%d7%95%d7%a8%d7%99%d7%9d/",
+        "sourceHash": "93d6a08c4ff7f96cd3686c15df6dea42496ebd12c64d0da4c8a080e34be3a2ce",
+        "capturedAt": "2026-10-19T14:21:27.949051+00:00",
+        "canonical": "https://derech-tkuma.com/סיורים/",
+        "productId": "7882",
+        "dateLiteral": "27/10/26",
+        "priceLiteral": "170.00"
+      },
+      "unknownFields": [
+        "startsAt",
+        "endsAt",
+        "capacity",
+        "meetingPoint"
+      ],
+      "cardSelector": ".e-loop-item-7882"
+    },
+    {
+      "kind": "occurrence",
+      "id": "source-product-7891",
+      "content": {
+        "tourId": "open-tour",
+        "title": "סיור בעוטף ביום שישי",
+        "date": "2026-10-30",
+        "dateLabel": "30/10/2026",
+        "startsAt": null,
+        "endsAt": null,
+        "timezone": "Asia/Jerusalem",
+        "meetingPoint": "",
+        "priceMinor": 17000,
+        "currency": "ILS",
+        "capacity": null,
+        "note": ""
+      },
+      "provenance": {
+        "sourceUrl": "https://derech-tkuma.com/%d7%a1%d7%99%d7%95%d7%a8%d7%99%d7%9d/",
+        "sourceHash": "93d6a08c4ff7f96cd3686c15df6dea42496ebd12c64d0da4c8a080e34be3a2ce",
+        "capturedAt": "2026-10-19T14:21:27.949051+00:00",
+        "canonical": "https://derech-tkuma.com/סיורים/",
+        "productId": "7891",
+        "dateLiteral": "30/10/2026",
+        "priceLiteral": "170.00"
+      },
+      "unknownFields": [
+        "startsAt",
+        "endsAt",
+        "capacity",
+        "meetingPoint"
+      ],
+      "cardSelector": ".e-loop-item-7891"
+    }
+  ],
+  "bindings": [
+    {
+      "page": "/maslulim/נקודות-החיבור/",
+      "kind": "tour",
+      "id": "route-points",
+      "field": "title",
+      "fieldId": "text-62",
+      "selector": "[data-edit-id=\"text-62\"]"
+    },
+    {
+      "page": "/maslulim/נקודות-החיבור/",
+      "kind": "tour",
+      "id": "route-points",
+      "field": "description",
+      "fieldId": "text-67",
+      "selector": "[data-edit-id=\"text-67\"]"
+    },
+    {
+      "page": "/",
+      "kind": "tour",
+      "id": "route-points",
+      "field": "title",
+      "fieldId": "text-25",
+      "selector": "[data-edit-id=\"text-25\"]",
+      "prefix": "מסלול "
+    },
+    {
+      "page": "/",
+      "kind": "tour",
+      "id": "route-points",
+      "field": "title",
+      "fieldId": "text-78",
+      "selector": "[data-edit-id=\"text-78\"]",
+      "prefix": "מסלול "
+    },
+    {
+      "page": "/maslulim/נקודות-החיבור/",
+      "kind": "tour",
+      "id": "route-points",
+      "field": "title",
+      "fieldId": "text-25",
+      "selector": "[data-edit-id=\"text-25\"]",
+      "prefix": "מסלול "
+    },
+    {
+      "page": "/maslulim/נקודות-החיבור/",
+      "kind": "tour",
+      "id": "route-points",
+      "field": "title",
+      "fieldId": "text-85",
+      "selector": "[data-edit-id=\"text-85\"]",
+      "prefix": "מסלול "
+    },
+    {
+      "page": "/maslulim/עוז-מול-תופת/",
+      "kind": "tour",
+      "id": "route-points",
+      "field": "title",
+      "fieldId": "text-25",
+      "selector": "[data-edit-id=\"text-25\"]",
+      "prefix": "מסלול "
+    },
+    {
+      "page": "/maslulim/עוז-מול-תופת/",
+      "kind": "tour",
+      "id": "route-points",
+      "field": "title",
+      "fieldId": "text-85",
+      "selector": "[data-edit-id=\"text-85\"]",
+      "prefix": "מסלול "
+    },
+    {
+      "page": "/maslulim/קו-המגע/",
+      "kind": "tour",
+      "id": "route-points",
+      "field": "title",
+      "fieldId": "text-25",
+      "selector": "[data-edit-id=\"text-25\"]",
+      "prefix": "מסלול "
+    },
+    {
+      "page": "/maslulim/קו-המגע/",
+      "kind": "tour",
+      "id": "route-points",
+      "field": "title",
+      "fieldId": "text-91",
+      "selector": "[data-edit-id=\"text-91\"]",
+      "prefix": "מסלול "
+    },
+    {
+      "page": "/המסלולים/",
+      "kind": "tour",
+      "id": "route-points",
+      "field": "title",
+      "fieldId": "text-25",
+      "selector": "[data-edit-id=\"text-25\"]",
+      "prefix": "מסלול "
+    },
+    {
+      "page": "/המסלולים/",
+      "kind": "tour",
+      "id": "route-points",
+      "field": "title",
+      "fieldId": "text-67",
+      "selector": "[data-edit-id=\"text-67\"]",
+      "prefix": "מסלול "
+    },
+    {
+      "page": "/המסלולים/",
+      "kind": "tour",
+      "id": "route-points",
+      "field": "image",
+      "fieldId": "image-196",
+      "selector": "[data-image-id=\"image-196\"]"
+    },
+    {
+      "page": "/המסלולים/",
+      "kind": "tour",
+      "id": "route-points",
+      "field": "visibility",
+      "selector": ".jet-listing-dynamic-post-6725",
+      "cardClass": "jet-listing-dynamic-post-6725"
+    },
+    {
+      "page": "/המסלולים/",
+      "kind": "tour",
+      "id": "route-points",
+      "field": "image",
+      "selector": ".jet-listing-dynamic-post-6725 .elementor-element-a0fe929",
+      "cardClass": "jet-listing-dynamic-post-6725",
+      "backgroundClass": "elementor-element-a0fe929"
+    },
+    {
+      "page": "/maslulim/עוז-מול-תופת/",
+      "kind": "tour",
+      "id": "route-oz",
+      "field": "title",
+      "fieldId": "text-62",
+      "selector": "[data-edit-id=\"text-62\"]"
+    },
+    {
+      "page": "/",
+      "kind": "tour",
+      "id": "route-oz",
+      "field": "title",
+      "fieldId": "text-28",
+      "selector": "[data-edit-id=\"text-28\"]",
+      "prefix": "מסלול "
+    },
+    {
+      "page": "/",
+      "kind": "tour",
+      "id": "route-oz",
+      "field": "title",
+      "fieldId": "text-83",
+      "selector": "[data-edit-id=\"text-83\"]",
+      "prefix": "מסלול "
+    },
+    {
+      "page": "/maslulim/נקודות-החיבור/",
+      "kind": "tour",
+      "id": "route-oz",
+      "field": "title",
+      "fieldId": "text-28",
+      "selector": "[data-edit-id=\"text-28\"]",
+      "prefix": "מסלול "
+    },
+    {
+      "page": "/maslulim/נקודות-החיבור/",
+      "kind": "tour",
+      "id": "route-oz",
+      "field": "title",
+      "fieldId": "text-90",
+      "selector": "[data-edit-id=\"text-90\"]",
+      "prefix": "מסלול "
+    },
+    {
+      "page": "/maslulim/עוז-מול-תופת/",
+      "kind": "tour",
+      "id": "route-oz",
+      "field": "title",
+      "fieldId": "text-28",
+      "selector": "[data-edit-id=\"text-28\"]",
+      "prefix": "מסלול "
+    },
+    {
+      "page": "/maslulim/עוז-מול-תופת/",
+      "kind": "tour",
+      "id": "route-oz",
+      "field": "title",
+      "fieldId": "text-90",
+      "selector": "[data-edit-id=\"text-90\"]",
+      "prefix": "מסלול "
+    },
+    {
+      "page": "/maslulim/קו-המגע/",
+      "kind": "tour",
+      "id": "route-oz",
+      "field": "title",
+      "fieldId": "text-28",
+      "selector": "[data-edit-id=\"text-28\"]",
+      "prefix": "מסלול "
+    },
+    {
+      "page": "/maslulim/קו-המגע/",
+      "kind": "tour",
+      "id": "route-oz",
+      "field": "title",
+      "fieldId": "text-96",
+      "selector": "[data-edit-id=\"text-96\"]",
+      "prefix": "מסלול "
+    },
+    {
+      "page": "/המסלולים/",
+      "kind": "tour",
+      "id": "route-oz",
+      "field": "title",
+      "fieldId": "text-28",
+      "selector": "[data-edit-id=\"text-28\"]",
+      "prefix": "מסלול "
+    },
+    {
+      "page": "/המסלולים/",
+      "kind": "tour",
+      "id": "route-oz",
+      "field": "title",
+      "fieldId": "text-72",
+      "selector": "[data-edit-id=\"text-72\"]",
+      "prefix": "מסלול "
+    },
+    {
+      "page": "/המסלולים/",
+      "kind": "tour",
+      "id": "route-oz",
+      "field": "image",
+      "fieldId": "image-197",
+      "selector": "[data-image-id=\"image-197\"]"
+    },
+    {
+      "page": "/המסלולים/",
+      "kind": "tour",
+      "id": "route-oz",
+      "field": "visibility",
+      "selector": ".jet-listing-dynamic-post-6724",
+      "cardClass": "jet-listing-dynamic-post-6724"
+    },
+    {
+      "page": "/המסלולים/",
+      "kind": "tour",
+      "id": "route-oz",
+      "field": "image",
+      "selector": ".jet-listing-dynamic-post-6724 .elementor-element-a0fe929",
+      "cardClass": "jet-listing-dynamic-post-6724",
+      "backgroundClass": "elementor-element-a0fe929"
+    },
+    {
+      "page": "/maslulim/קו-המגע/",
+      "kind": "tour",
+      "id": "route-contact",
+      "field": "title",
+      "fieldId": "text-62",
+      "selector": "[data-edit-id=\"text-62\"]"
+    },
+    {
+      "page": "/",
+      "kind": "tour",
+      "id": "route-contact",
+      "field": "title",
+      "fieldId": "text-31",
+      "selector": "[data-edit-id=\"text-31\"]",
+      "prefix": "מסלול "
+    },
+    {
+      "page": "/",
+      "kind": "tour",
+      "id": "route-contact",
+      "field": "title",
+      "fieldId": "text-88",
+      "selector": "[data-edit-id=\"text-88\"]",
+      "prefix": "מסלול "
+    },
+    {
+      "page": "/maslulim/נקודות-החיבור/",
+      "kind": "tour",
+      "id": "route-contact",
+      "field": "title",
+      "fieldId": "text-31",
+      "selector": "[data-edit-id=\"text-31\"]",
+      "prefix": "מסלול "
+    },
+    {
+      "page": "/maslulim/נקודות-החיבור/",
+      "kind": "tour",
+      "id": "route-contact",
+      "field": "title",
+      "fieldId": "text-95",
+      "selector": "[data-edit-id=\"text-95\"]",
+      "prefix": "מסלול "
+    },
+    {
+      "page": "/maslulim/עוז-מול-תופת/",
+      "kind": "tour",
+      "id": "route-contact",
+      "field": "title",
+      "fieldId": "text-31",
+      "selector": "[data-edit-id=\"text-31\"]",
+      "prefix": "מסלול "
+    },
+    {
+      "page": "/maslulim/עוז-מול-תופת/",
+      "kind": "tour",
+      "id": "route-contact",
+      "field": "title",
+      "fieldId": "text-95",
+      "selector": "[data-edit-id=\"text-95\"]",
+      "prefix": "מסלול "
+    },
+    {
+      "page": "/maslulim/קו-המגע/",
+      "kind": "tour",
+      "id": "route-contact",
+      "field": "title",
+      "fieldId": "text-31",
+      "selector": "[data-edit-id=\"text-31\"]",
+      "prefix": "מסלול "
+    },
+    {
+      "page": "/maslulim/קו-המגע/",
+      "kind": "tour",
+      "id": "route-contact",
+      "field": "title",
+      "fieldId": "text-101",
+      "selector": "[data-edit-id=\"text-101\"]",
+      "prefix": "מסלול "
+    },
+    {
+      "page": "/המסלולים/",
+      "kind": "tour",
+      "id": "route-contact",
+      "field": "title",
+      "fieldId": "text-31",
+      "selector": "[data-edit-id=\"text-31\"]",
+      "prefix": "מסלול "
+    },
+    {
+      "page": "/המסלולים/",
+      "kind": "tour",
+      "id": "route-contact",
+      "field": "title",
+      "fieldId": "text-77",
+      "selector": "[data-edit-id=\"text-77\"]",
+      "prefix": "מסלול "
+    },
+    {
+      "page": "/המסלולים/",
+      "kind": "tour",
+      "id": "route-contact",
+      "field": "image",
+      "fieldId": "image-199",
+      "selector": "[data-image-id=\"image-199\"]"
+    },
+    {
+      "page": "/המסלולים/",
+      "kind": "tour",
+      "id": "route-contact",
+      "field": "visibility",
+      "selector": ".jet-listing-dynamic-post-6726",
+      "cardClass": "jet-listing-dynamic-post-6726"
+    },
+    {
+      "page": "/המסלולים/",
+      "kind": "tour",
+      "id": "route-contact",
+      "field": "image",
+      "selector": ".jet-listing-dynamic-post-6726 .elementor-element-a0fe929",
+      "cardClass": "jet-listing-dynamic-post-6726",
+      "backgroundClass": "elementor-element-a0fe929"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "tour",
+      "id": "open-tour",
+      "field": "title",
+      "fieldId": "text-67",
+      "selector": "[data-edit-id=\"text-67\"]"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-7844",
+      "field": "title",
+      "fieldId": "text-89",
+      "selector": "[data-edit-id=\"text-89\"]"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-7844",
+      "field": "dateLabel",
+      "fieldId": "text-90",
+      "selector": "[data-edit-id=\"text-90\"]"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-7844",
+      "field": "priceMinor",
+      "selector": ".e-loop-item-7844 .woocommerce-Price-amount",
+      "currencyFieldId": "text-91",
+      "sourceLiteral": "170.00"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-7844",
+      "field": "visibility",
+      "selector": ".e-loop-item-7844",
+      "cardClass": "e-loop-item-7844"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-7920",
+      "field": "title",
+      "fieldId": "text-93",
+      "selector": "[data-edit-id=\"text-93\"]"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-7920",
+      "field": "dateLabel",
+      "fieldId": "text-94",
+      "selector": "[data-edit-id=\"text-94\"]"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-7920",
+      "field": "priceMinor",
+      "selector": ".e-loop-item-7920 .woocommerce-Price-amount",
+      "currencyFieldId": "text-95",
+      "sourceLiteral": "170.00"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-7920",
+      "field": "visibility",
+      "selector": ".e-loop-item-7920",
+      "cardClass": "e-loop-item-7920"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-7681",
+      "field": "title",
+      "fieldId": "text-97",
+      "selector": "[data-edit-id=\"text-97\"]"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-7681",
+      "field": "dateLabel",
+      "fieldId": "text-98",
+      "selector": "[data-edit-id=\"text-98\"]"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-7681",
+      "field": "priceMinor",
+      "selector": ".e-loop-item-7681 .woocommerce-Price-amount",
+      "currencyFieldId": "text-99",
+      "sourceLiteral": "249.00"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-7681",
+      "field": "visibility",
+      "selector": ".e-loop-item-7681",
+      "cardClass": "e-loop-item-7681"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-7681",
+      "field": "note",
+      "fieldId": "text-101",
+      "selector": "[data-edit-id=\"text-101\"]"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-7899",
+      "field": "title",
+      "fieldId": "text-102",
+      "selector": "[data-edit-id=\"text-102\"]"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-7899",
+      "field": "dateLabel",
+      "fieldId": "text-103",
+      "selector": "[data-edit-id=\"text-103\"]"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-7899",
+      "field": "priceMinor",
+      "selector": ".e-loop-item-7899 .woocommerce-Price-amount",
+      "currencyFieldId": "text-104",
+      "sourceLiteral": "170.00"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-7899",
+      "field": "visibility",
+      "selector": ".e-loop-item-7899",
+      "cardClass": "e-loop-item-7899"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-7882",
+      "field": "title",
+      "fieldId": "text-106",
+      "selector": "[data-edit-id=\"text-106\"]"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-7882",
+      "field": "dateLabel",
+      "fieldId": "text-107",
+      "selector": "[data-edit-id=\"text-107\"]"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-7882",
+      "field": "priceMinor",
+      "selector": ".e-loop-item-7882 .woocommerce-Price-amount",
+      "currencyFieldId": "text-108",
+      "sourceLiteral": "170.00"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-7882",
+      "field": "visibility",
+      "selector": ".e-loop-item-7882",
+      "cardClass": "e-loop-item-7882"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-7882",
+      "field": "note",
+      "fieldId": "text-110",
+      "selector": "[data-edit-id=\"text-110\"]"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-7891",
+      "field": "title",
+      "fieldId": "text-111",
+      "selector": "[data-edit-id=\"text-111\"]"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-7891",
+      "field": "dateLabel",
+      "fieldId": "text-112",
+      "selector": "[data-edit-id=\"text-112\"]"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-7891",
+      "field": "priceMinor",
+      "selector": ".e-loop-item-7891 .woocommerce-Price-amount",
+      "currencyFieldId": "text-113",
+      "sourceLiteral": "170.00"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-7891",
+      "field": "visibility",
+      "selector": ".e-loop-item-7891",
+      "cardClass": "e-loop-item-7891"
+    }
+  ],
+  "notes": [
+    "Only existing imported records have source-card bindings. New records require an explicit presentation binding.",
+    "Unknown source times, exact meeting points and capacities are not inferred.",
+    "Open-tour dated products are not assumed to equal a particular route.",
+    "Source payments/forms remain disabled by the existing review guard."
+  ]
+}

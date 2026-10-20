@@ -32,6 +32,7 @@ jobs:
       WORKERS_CI_COMMIT_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
       DERECH_DEPLOY_BRANCH: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name }}
       DERECH_CF_AUTO_DEPLOY_ENABLED: ${{ vars.DERECH_CF_AUTO_DEPLOY_ENABLED }}
+      DERECH_CF_VERIFIED_JOB_DEPLOY_ENABLED: ${{ vars.DERECH_CF_VERIFIED_JOB_DEPLOY_ENABLED }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -85,7 +86,8 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          test -n "$CLOUDFLARE_API_TOKEN" && test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
           node scripts/validate-cloudflare-artifact.mjs "$RUNNER_TEMP/derech-cloudflare.json"
           npx wrangler d1 migrations apply DB --remote --config "$RUNNER_TEMP/derech-cloudflare.json"
       - name: Deploy checked artifact and verify source identity/noindex
@@ -95,6 +97,8 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           GH_READ_TOKEN: ${{ github.token }}
         run: |
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
           node ../production/cloudflare-cd-policy.mjs
           node scripts/validate-cloudflare-artifact.mjs "$RUNNER_TEMP/derech-cloudflare.json"
           npx wrangler deploy --config dist/server/wrangler.json

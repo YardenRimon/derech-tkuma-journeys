@@ -1,0 +1,182 @@
+name: Shared CMS checks
+on:
+  pull_request:
+    paths: ['platform-cms/**', 'production/**', 'scripts/*site*.py', 'scripts/*site*.mjs', 'scripts/cms-backup-*.py', 'scripts/*backup*.py', 'scripts/verify-cms-r2-recovery.py', 'backup-receiver/**', '.github/workflows/site-*.yml']
+  push:
+    branches: [main, production-foundation-20261019]
+    paths: ['platform-cms/**', 'production/**', 'scripts/*site*.py', 'scripts/*site*.mjs', 'scripts/cms-backup-*.py', 'scripts/*backup*.py', 'scripts/verify-cms-r2-recovery.py', 'backup-receiver/**', '.github/workflows/site-*.yml']
+permissions:
+  contents: read
+concurrency:
+  group: site-ci-${{ github.ref }}
+  # An enabled push run can own a protected inline deployment; never interrupt it on a new push.
+  cancel-in-progress: ${{ !(github.event_name == 'push' && vars.DERECH_CF_VERIFIED_JOB_DEPLOY_ENABLED == 'true') }}
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: platform-cms/package-lock.json
+      - name: Verify trusted review deployment source and trigger policy
+        run: node production/test-cloudflare-cd-policy.mjs
+      - name: Verify bounded external monitoring and incident policy
+        run: python3 -m unittest discover -s scripts -p 'test_site_review_*.py'
+      - name: Verify backup downloader origin and credential boundaries
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_cms_backup_download.py'
+          python3 -m unittest discover -s scripts -p 'test_cms_cloudflare_delta.py'
+          python3 -m unittest discover -s scripts -p 'test_handoff_cms_cloudflare_backup.py'
+      - name: Install locked application dependencies
+        working-directory: platform-cms
+        run: npm ci --no-audit --no-fund
+      - name: Verify encrypted backup receiver security and local storage
+        run: |
+          node backup-receiver/test-worker.mjs
+          python3 -m unittest discover -s backup-receiver -p 'test_*.py'
+          node backup-receiver/test-r2-local.mjs
+          python3 -m unittest discover -s scripts -p 'test_site_review_vps.py'
+      - name: Verify pinned build against full source reconstruction
+        working-directory: platform-cms
+        run: npm run prepare:pages:verify
+      - name: Prepare exact public source templates
+        working-directory: platform-cms
+        run: npm run prepare:pages
+      - name: Check types and content/access/isolation contracts
+        working-directory: platform-cms
+        run: |
+          npm run check && npm test
+          node --experimental-strip-types scripts/test-backup.mjs
+          node --experimental-strip-types scripts/test-contact.mjs
+          node --experimental-strip-types scripts/test-visitor-policy.mjs
+          node --experimental-strip-types scripts/test-contact-client.mjs
+          node scripts/test-contact-http.mjs
+      - name: Verify real local HTTP lifecycle and public projections
+        working-directory: platform-cms
+        run: |
+          npm run setup:local
+          SITES_PERMISSIONS_TEST=1 npm run dev > /tmp/derech-cms-ci.log 2>&1 &
+          cms_pid=$!
+          trap 'result=$?; kill "$cms_pid" 2>/dev/null || true; if [ "$result" -ne 0 ]; then tail -n 100 /tmp/derech-cms-ci.log; fi' EXIT
+          ready=0
+          for attempt in $(seq 1 40); do
+            if curl --silent --fail http://127.0.0.1:5174/ > /dev/null; then ready=1; break; fi
+            if ! kill -0 "$cms_pid" 2>/dev/null; then break; fi
+            sleep 1
+          done
+          test "$ready" -eq 1
+          npm run test:http
+          npm run test:admin-http
+          npm run test:tasks-http
+          node scripts/test-current-collections-http.mjs
+          npm run test:machine-http
+      - name: Build shared CMS
+        working-directory: platform-cms
+        run: npm run build
+      - name: Verify export and SEO source boundaries
+        run: |
+          python3 -m unittest discover -s production -p 'test_*.py'
+          python3 -m unittest discover -s production/seo -p 'test_*.py'
+  deploy-review:
+    needs: verify
+    if: >-
+      github.event_name == 'push' && needs.verify.result == 'success' &&
+      vars.DERECH_CF_VERIFIED_JOB_DEPLOY_ENABLED == 'true' &&
+      github.repository == 'YardenRimon/derech-tkuma-journeys' &&
+      github.event.repository.full_name == github.repository &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/production-foundation-20261019')
+    permissions:
+      contents: read
+      actions: read
+    environment: derech-cloudflare-review
+    concurrency:
+      group: derech-cloudflare-review
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      WORKERS_CI_COMMIT_SHA: ${{ github.sha }}
+      DERECH_DEPLOY_BRANCH: ${{ github.ref_name }}
+      DERECH_CF_AUTO_DEPLOY_ENABLED: ${{ vars.DERECH_CF_AUTO_DEPLOY_ENABLED }}
+      DERECH_CF_VERIFIED_JOB_DEPLOY_ENABLED: ${{ vars.DERECH_CF_VERIFIED_JOB_DEPLOY_ENABLED }}
+      DERECH_CI_VERIFY_RESULT: ${{ needs.verify.result }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: platform-cms/package-lock.json
+      - name: Refuse an untrusted, superseded or application-free source
+        env:
+          GH_READ_TOKEN: ${{ github.token }}
+        run: |
+          node production/test-cloudflare-cd-policy.mjs
+          node production/cloudflare-cd-policy.mjs
+      - name: Install locked dependencies
+        working-directory: platform-cms
+        run: npm ci --no-audit --no-fund
+      - name: Materialize non-secret reviewed configuration
+        env:
+          CF_CONFIG_JSON: ${{ vars.DERECH_CF_CONFIG_JSON }}
+        run: |
+          test -n "$CF_CONFIG_JSON"
+          printf '%s\n' "$CF_CONFIG_JSON" > "$RUNNER_TEMP/derech-cloudflare.json"
+          node --input-type=module -e 'import fs from "node:fs";import path from "node:path";const p=process.env.RUNNER_TEMP+"/derech-cloudflare.json",c=JSON.parse(fs.readFileSync(p));c.d1_databases[0].migrations_dir=path.resolve("platform-cms/drizzle");fs.writeFileSync(p,JSON.stringify(c));'
+      - name: Hydrate pinned public media
+        env:
+          MEDIA_URL: ${{ vars.DERECH_MEDIA_ARCHIVE_URL }}
+          MEDIA_SHA256: ${{ vars.DERECH_MEDIA_ARCHIVE_SHA256 }}
+        run: |
+          test -n "$MEDIA_URL" && test -n "$MEDIA_SHA256"
+          case "$MEDIA_URL" in https://*) ;; *) exit 1 ;; esac
+          curl --fail --silent --show-error --proto '=https' --proto-redir '=https' --location --max-redirs 2 "$MEDIA_URL" -o "$RUNNER_TEMP/derech-media.tgz"
+          python3 platform-cms/scripts/hydrate-cloudflare-media.py --archive "$RUNNER_TEMP/derech-media.tgz" --sha256 "$MEDIA_SHA256" --root platform-cms
+      - name: Verify full source reconstruction and tested standalone build
+        working-directory: platform-cms
+        env:
+          PLATFORM_CF_CONFIG_PATH: ${{ runner.temp }}/derech-cloudflare.json
+        run: |
+          node scripts/build-cloudflare.mjs
+          node --experimental-strip-types scripts/test-visitor-policy.mjs --artifact
+      - name: Refuse a superseded queued source commit
+        env:
+          GH_READ_TOKEN: ${{ github.token }}
+        run: |
+          node production/cloudflare-cd-policy.mjs
+      - name: Apply schema-only migrations to isolated review DB
+        working-directory: platform-cms
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          node scripts/validate-cloudflare-artifact.mjs "$RUNNER_TEMP/derech-cloudflare.json"
+          npx wrangler d1 migrations apply DB --remote --config "$RUNNER_TEMP/derech-cloudflare.json"
+      - name: Deploy checked artifact and verify source identity/noindex
+        working-directory: platform-cms
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          GH_READ_TOKEN: ${{ github.token }}
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          node ../production/cloudflare-cd-policy.mjs
+          node scripts/validate-cloudflare-artifact.mjs "$RUNNER_TEMP/derech-cloudflare.json"
+          npx wrangler deploy --config dist/server/wrangler.json
+          node scripts/verify-cloudflare-live.mjs "$RUNNER_TEMP/derech-cloudflare.json"
+      - name: Remove temporary build configuration/media
+        if: always()
+        run: rm -f "$RUNNER_TEMP/derech-cloudflare.json" "$RUNNER_TEMP/derech-media.tgz"

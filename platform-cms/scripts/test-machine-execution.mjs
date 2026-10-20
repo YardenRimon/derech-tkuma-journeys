@@ -1,0 +1,28 @@
+import assert from'node:assert/strict';import{createHmac}from'node:crypto';import{readFileSync}from'node:fs';
+import ts from'typescript';
+const asModule=source=>'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ESNext}}).outputText).toString('base64');
+let gateway=readFileSync(new URL('../lib/execution-core.ts',import.meta.url),'utf8');
+for(const file of['collection-core','collection-d1'])gateway=gateway.replaceAll("'./"+file+"'",JSON.stringify(new URL('../lib/'+file+'.ts',import.meta.url).href));
+let boundary=readFileSync(new URL('../app/api/machine/execution/machine-request.ts',import.meta.url),'utf8');
+boundary=boundary.replace("'../../../../lib/collection-core'",JSON.stringify(new URL('../lib/collection-core.ts',import.meta.url).href)).replace("'../../../../lib/execution-core'",JSON.stringify(asModule(gateway)));
+const {machineExecutionRequest,forwardMachineExecution}=await import(asModule(boundary));
+const secret='local-machine-fixture-only-'+'.'.repeat(48),origin='https://local-fixture.invalid',path='/api/machine/execution/';
+const request=(value,extra={})=>{const raw=typeof value==='string'?value:JSON.stringify(value),time=String(Math.floor(Date.now()/1000));return new Request(origin+path,{method:'POST',body:raw,headers:{'content-type':'application/json','x-bridge-time':time,'x-bridge-signature':createHmac('sha256',secret).update(time+'\n'+raw).digest('hex'),...extra}});};
+const packet={schemaVersion:1,tasks:[],effects:[],report:{schemaVersion:1,tenantId:'derech',siteId:'derech-main',sourceAt:new Date().toISOString(),jobs:[]}};
+const raw=' {"schemaVersion":1,"tasks":[],"effects":[],"report":{"tenantId":"derech","siteId":"derech-main"}} \n';
+const forwarded=await machineExecutionRequest(request(raw),secret);assert.equal(await forwarded.text(),raw,'exact signed bytes/whitespace must survive delegation');
+let calls=0;const handler=async req=>{calls++;return Response.json({raw:await req.text()},{status:202});};
+const response=await forwardMachineExecution(request(packet),secret,handler);assert.equal(response.status,202);assert.equal(calls,1);
+for(const operation of['rollback','publish',null,false,{},'']){await assert.rejects(forwardMachineExecution(request({...packet,operation},{cookie:'signed-admin-session','cf-access-jwt-assertion':'context-JWT-present',origin}),secret,handler),e=>e.status===403);assert.equal(calls,1,'valid machine signature and visitor session must never reach browser action');}
+await assert.rejects(forwardMachineExecution(request(packet,{'x-bridge-signature':'0'.repeat(64)}),secret,handler),e=>e.status===401);assert.equal(calls,1);
+await assert.rejects(machineExecutionRequest(request(packet),undefined),e=>e.status===503);
+await assert.rejects(machineExecutionRequest(request('{'),secret),e=>e.status===400);
+await assert.rejects(machineExecutionRequest(request('[]'),secret),e=>e.status===400);
+await assert.rejects(machineExecutionRequest(request('{',{'x-bridge-signature':'0'.repeat(64)}),secret),e=>e.status===401,'HMAC must precede JSON parsing');
+await assert.rejects(machineExecutionRequest(new Request(origin+path),secret),e=>e.status===405);
+await assert.rejects(machineExecutionRequest(new Request(origin+path+'?operation=rollback',{method:'POST',body:'{}'}),secret),e=>e.status===400);
+let cancelled=false;const oversized=new Request(origin+path,{method:'POST',duplex:'half',body:new ReadableStream({start(c){c.enqueue(new Uint8Array(300000));c.enqueue(new Uint8Array(200001));},cancel(){cancelled=true;}})});
+await assert.rejects(machineExecutionRequest(oversized,undefined),e=>e.status===413);assert(cancelled,'over-limit stream must be cancelled before HMAC or parsing');
+const exact=' '.repeat(500000-JSON.stringify(packet).length)+JSON.stringify(packet);assert.equal((await machineExecutionRequest(request(exact),secret)).headers.get('content-type'),'application/json');
+const source=readFileSync(new URL('../app/api/machine/execution/route.ts',import.meta.url),'utf8');assert(source.includes('POST as executionPost'));assert(!/export (?:async )?function (?:GET|PUT|PATCH|DELETE)/.test(source));
+console.log('PASS machine alias: exact-byte forwarding, unchanged handler delegation, HMAC-before-parse,500000-byte stream/cancel boundary, operation-presence denial despite valid HMAC/admin context, POST-only and no query surface');
