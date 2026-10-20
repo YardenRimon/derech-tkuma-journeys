@@ -29,7 +29,10 @@ jobs:
       - name: Verify bounded external monitoring and incident policy
         run: python3 -m unittest discover -s scripts -p 'test_site_review_*.py'
       - name: Verify backup downloader origin and credential boundaries
-        run: python3 -m unittest discover -s scripts -p 'test_cms_backup_download.py'
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_cms_backup_download.py'
+          python3 -m unittest discover -s scripts -p 'test_cms_cloudflare_delta.py'
+          python3 -m unittest discover -s scripts -p 'test_handoff_cms_cloudflare_backup.py'
       - name: Install locked application dependencies
         working-directory: platform-cms
         run: npm ci --no-audit --no-fund
