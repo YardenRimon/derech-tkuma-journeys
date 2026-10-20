@@ -50,6 +50,13 @@
       "when": 1792485348373,
       "tag": "0006_platform_auth",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1792530239716,
+      "tag": "0008_contact_controls",
+      "breakpoints": true
     }
   ]
 }

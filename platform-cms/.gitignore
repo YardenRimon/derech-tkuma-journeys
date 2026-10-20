@@ -12,3 +12,6 @@ lib/generated-pages.json
 !.dev.vars.example
 
 node_modules
+
+/dist-production/
+scripts/__pycache__/

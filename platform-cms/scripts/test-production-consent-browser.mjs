@@ -1,0 +1,62 @@
+/** Isolated Chrome-for-Testing profile; every URL is fulfilled/aborted here.
+ * Synthetic container code proves the browser boundary, not provider setup. */
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+import {readFileSync,mkdirSync} from 'node:fs';
+import {build} from 'esbuild';
+import {fileURLToPath} from 'node:url';
+import {fixtureProfile,fixtureMeasurement} from './production-profile-fixture.mjs';
+import {consentValue,CONSENT_COOKIE} from '../public/consent-state.js';
+const require=createRequire(import.meta.url),{chromium}=require(process.env.DERECH_TEST_PLAYWRIGHT_MODULE??'playwright');
+const root=fileURLToPath(new URL('../',import.meta.url)),origin=fixtureProfile.origin;
+globalThis.__productionBrowserEnv={};
+async function routes(accepted){
+ const bundle=await build({stdin:{contents:`export {GET as page}from'./app/[[...slug]]/route';export {GET as configuration}from'./app/visitor-configuration/route';export {GET as frame}from'./app/measurement-frame/route';export {exactReviewProtection,exactReviewVisitor}from'./lib/visitor-release';`,resolveDir:root},bundle:true,write:false,format:'esm',platform:'node',define:{__DERECH_PRODUCTION_BUILD__:JSON.stringify(accepted),__DERECH_PRODUCTION_PROFILE__:JSON.stringify(fixtureProfile)},plugins:[{name:'browser-fixture',setup(builder){builder.onResolve({filter:/^(cloudflare:workers|@\/lib\/cms)$/},args=>({path:args.path,namespace:'fixture'}));builder.onLoad({filter:/.*/,namespace:'fixture'},({path})=>({contents:path==='cloudflare:workers'?'export const env=globalThis.__productionBrowserEnv;':'export class CmsError extends Error{};export async function getPublishedPage(){return globalThis.__productionBrowserHtml;}',loader:'js'}));}}],logLevel:'silent'});
+ return import('data:text/javascript;base64,'+Buffer.from(bundle.outputFiles[0].text).toString('base64'));
+}
+const accepted=await routes(true),closed=await routes(false);
+globalThis.__productionBrowserHtml='<!doctype html><html lang="he" dir="rtl"><head>'+accepted.exactReviewProtection+'<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="canonical" href="'+origin+'/"><title>דרך התקומה</title>'+accepted.exactReviewVisitor+'</head><body style="margin:0;background:#f7f5ef;font:18px Arial;color:#254d3f"><main style="max-width:1000px;margin:70px auto;padding:20px"><h1>דרך התקומה</h1><p>סביבת בדיקה מקומית של העדפות הפרטיות</p><form id="source-form"><label>שם<input name="fullname" value="Synthetic Person"></label><input name="phone" value="0501234567"><input name="email" value="private@example.test"><button type="submit">שליחת טופס מקור</button></form><a id="old-grow" href="https://grow.payments/fixture">תשלום מקור</a><footer><a id="whatsapp" href="https://wa.me/535955166?text=private%40example.test">נשמח לדבר איתך</a></footer></main></body></html>';
+const browser=await chromium.launch({headless:true,...(process.env.DERECH_TEST_BROWSER_EXECUTABLE?{executablePath:process.env.DERECH_TEST_BROWSER_EXECUTABLE}:{})});
+const contexts=[];let providerAttempts=[];
+const fakeSdk=`window.syntheticProviderLoaded=true;const c=JSON.parse(document.getElementById('dt-measurement-config').textContent);if(c.allowedPurposes.analytics){document.cookie='_ga=synthetic-first-party; Path=/; Secure; SameSite=Lax';setInterval(()=>fetch('https://www.google-analytics.com/g/collect?tid=G-DV3E8J77EX&en=synthetic_pulse',{method:'POST'}).catch(()=>{}),80);}if(c.allowedPurposes.marketing){const s=document.createElement('script');s.src='https://connect.facebook.net/en_US/fbevents.js';document.head.appendChild(s);}`;
+async function contextFor(module,viewport={width:1440,height:1000}){
+ const context=await browser.newContext({viewport});contexts.push(context);
+ await context.route('**/*',async route=>{
+  const request=route.request(),url=new URL(request.url());
+  if(url.origin!==origin){providerAttempts.push({url:url.href,method:request.method(),body:request.postData()});if(url.origin==='https://www.googletagmanager.com')return route.fulfill({status:200,contentType:'text/javascript',body:fakeSdk});if(url.origin==='https://connect.facebook.net')return route.fulfill({status:200,contentType:'text/javascript',body:'window.syntheticMetaLoaded=true;'});return route.fulfill({status:204,headers:{'access-control-allow-origin':origin},body:''});}
+  if(['/production-visitor.js','/consent-state.js','/measurement-frame.js','/production-guard.js','/visitor-policy.js','/__pilot__/guard.js'].includes(url.pathname))return route.fulfill({status:200,contentType:'text/javascript',body:readFileSync(new URL('../public'+url.pathname,import.meta.url),'utf8')});
+  const handler=url.pathname==='/visitor-configuration/'?module.configuration:url.pathname==='/measurement-frame/'?module.frame:module.page;
+  const response=await handler(new Request(url.href,{method:'GET',headers:await request.allHeaders()}));
+  return route.fulfill({status:response.status,headers:Object.fromEntries(response.headers),body:Buffer.from(await response.arrayBuffer())});
+ });
+ return context;
+}
+try{
+ const context=await contextFor(accepted),page=await context.newPage();
+ await page.goto(origin+'/?email=private@example.test&phone=0501234567');await page.locator('#dt-consent-wrap').waitFor({state:'attached'});
+ assert.equal(await page.locator('iframe').count(),0);assert.equal(providerAttempts.length,0,'no SDK before purpose choice');assert.equal(await page.locator('#dt-integration-unavailable').count(),0,'no baseline source copy change');
+ const sizes=await page.locator('[data-action=accept],[data-action=reject],[data-action=preferences]').evaluateAll(nodes=>nodes.map(n=>({height:n.getBoundingClientRect().height,background:getComputedStyle(n).backgroundColor,font:getComputedStyle(n).fontSize})));
+ assert.deepEqual(sizes[0],sizes[1]);assert.deepEqual(sizes[1],sizes[2]);
+ assert.equal(await page.locator('#whatsapp').getAttribute('href'),'https://wa.me/972535955166?text=private%40example.test');assert.equal(await page.locator('#whatsapp').textContent(),'נשמח לדבר איתך');
+ await page.locator('[data-action=reject]').click();assert.equal(await page.locator('iframe').count(),0);assert.equal(providerAttempts.length,0);const denied=(await context.cookies()).find(cookie=>cookie.name===CONSENT_COOKIE);assert.ok(denied.secure);assert.equal(denied.sameSite,'Lax');assert.equal(JSON.parse(decodeURIComponent(denied.value)).analytics,false);
+ await page.locator('[data-fab]').click();assert.equal(await page.locator('[name=analytics]').isChecked(),false);assert.equal(await page.locator('[name=marketing]').isChecked(),false);await page.locator('[name=analytics]').check();await page.locator('[data-action=save]').click();
+ await page.waitForFunction(()=>document.querySelector('iframe')?.contentWindow?.syntheticProviderLoaded===true);await page.waitForTimeout(180);
+ assert.ok(providerAttempts.some(x=>x.url==='https://www.googletagmanager.com/gtm.js?id=GTM-5N7NPTL4'));assert.ok(!providerAttempts.some(x=>x.url.includes('facebook')),'analytics purpose never loads Meta');
+ assert.ok((await context.cookies()).some(cookie=>cookie.name==='_ga'&&cookie.value==='synthetic-first-party'),'frame preserves first-party session storage');
+ const frame=page.frames().find(f=>f.url().includes('/measurement-frame/'));assert.equal(await frame.evaluate(()=>document.referrer),'');
+ const layer=await frame.evaluate(()=>window.dataLayer);for(const raw of ['private@example.test','0501234567','Synthetic Person','?email='])assert.ok(!JSON.stringify(layer).includes(raw));assert.ok(layer.some(e=>e.event==='dt_page_view'));
+ await page.evaluate(()=>{document.getElementById('whatsapp').addEventListener('click',e=>e.preventDefault());document.getElementById('whatsapp').click();});await page.waitForTimeout(40);assert.ok((await frame.evaluate(()=>window.dataLayer)).some(e=>e.event==='dt_whatsapp_click'));
+ await page.evaluate(()=>{document.getElementById('source-form').addEventListener('submit',()=>{window.unexpectedLegacySubmit=true;});document.getElementById('source-form').requestSubmit();});assert.equal(await page.evaluate(()=>window.unexpectedLegacySubmit??false),false,'source Elementor/WordPress paths remain blocked');assert.equal(await page.locator('[role=alert]#dt-integration-unavailable').count(),1);assert.match(await page.locator('#dt-integration-unavailable').textContent(),/WhatsApp/);await page.locator('#old-grow').click();assert.equal(await page.locator('#dt-integration-unavailable').count(),1,'repeated blocked actions reuse one honest fallback');assert.equal(page.url().split('?')[0],origin+'/');await page.locator('#dt-integration-unavailable button').click();assert.equal(await page.locator('#dt-integration-unavailable').count(),0);
+ await page.locator('[data-fab]').click();await page.locator('[data-action=revoke]').click();assert.equal(await page.locator('iframe').count(),0);const callsAfterRevoke=providerAttempts.length;await page.waitForTimeout(260);assert.equal(providerAttempts.length,callsAfterRevoke,'destroyed SDK context cannot schedule further calls');assert.ok(!(await context.cookies()).some(cookie=>cookie.name==='_ga'),'known analytics cookie cleared');
+ await page.reload();await page.locator('#dt-consent-wrap').waitFor({state:'attached'});await page.waitForTimeout(150);assert.equal(await page.locator('iframe').count(),0);assert.equal(providerAttempts.length,callsAfterRevoke,'revoke persists across reload');
+ await page.locator('[data-fab]').click();await page.locator('[name=marketing]').check();await page.locator('[data-action=save]').click();await page.waitForFunction(()=>document.querySelector('iframe')?.contentWindow?.syntheticMetaLoaded===true);const marketingFrame=page.frames().find(f=>f.url().includes('/measurement-frame/'));assert.equal(await marketingFrame.evaluate(()=>fetch('https://www.google-analytics.com/g/collect').then(()=>true,()=>false)),false,'marketing-only CSP blocks analytics even on attempted call');
+ const marketingLayer=await marketingFrame.evaluate(()=>window.dataLayer);assert.equal(marketingLayer.find(e=>e.event==='dt_consent').dt_analytics,false);
+ await page.locator('[data-fab]').click();await page.locator('[data-action=revoke]').click();
+ const output=process.env.DERECH_TEST_SCREENSHOT_DIR;await page.locator('[data-fab]').click();if(output){mkdirSync(output,{recursive:true});await page.screenshot({path:output+'/desktop.png'});}
+ await page.setViewportSize({width:390,height:844});if(output)await page.screenshot({path:output+'/mobile.png'});
+ assert.equal(await page.evaluate(()=>innerWidth),390,'mobile viewport applies even without screenshot output');assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'mobile has no horizontal overflow');
+ const deniedContext=await contextFor(closed),deniedPage=await deniedContext.newPage();await deniedContext.addCookies([{name:CONSENT_COOKIE,value:encodeURIComponent(JSON.stringify(consentValue(true,true,fixtureMeasurement.revision))),domain:'derech-tkuma.com',path:'/',secure:true,sameSite:'Lax'}]);
+ await deniedPage.addInitScript(()=>{window.production=true;window.__DERECH_PRODUCTION_BUILD__=true;window.__DERECH_PRODUCTION_PROFILE__={verified:true};});
+ const beforeClosed=providerAttempts.length;await deniedPage.goto(origin+'/?production=true');await deniedPage.addScriptTag({url:origin+'/production-visitor.js',type:'module'});await deniedPage.waitForTimeout(200);assert.equal(await deniedPage.locator('iframe').count(),0);assert.equal(await deniedPage.locator('#dt-consent-wrap').count(),0);assert.equal(providerAttempts.length,beforeClosed,'review/server-closed profile ignores flags/query/cookie');
+ console.log('PASS real isolated browser DOM: denied default/reject, equal Hebrew controls, unchecked preferences, exact WhatsApp, source form block, first-party session cookie, sanitized events/referrer, analytics-only/marketing-only CSP, revoke destroys timers and survives reload, mobile overflow and forged review flags denied. Provider URLs intercepted with synthetic code; no provider configuration or network verified.');
+}finally{for(const context of contexts)await context.close();await browser.close();delete globalThis.__productionBrowserEnv;delete globalThis.__productionBrowserHtml;}

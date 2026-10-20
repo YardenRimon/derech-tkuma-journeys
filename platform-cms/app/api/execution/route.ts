@@ -5,12 +5,19 @@ import {siteScope} from '@/lib/site-scope';
 import {CollectionError,Collections} from '@/lib/collection-core';
 import {ExecutionStore,verifySignature,effectOf,hash} from '@/lib/execution-core';
 import seed from '@/lib/current-collections.json';
+import {SeoDraftStore} from '@/lib/seo-draft-core';
+import {maintainContacts} from '@/lib/contact-maintenance';
+import {dispatchOneContact,type ContactDeliveryConfig} from '@/lib/contact-execution';
+import {ContactError} from '@/lib/contact-core';
 import {D1Tasks} from '@/lib/task-d1';
 import {Tasks,TaskError,type TaskReceipt} from '@/lib/task-core';
 import {parseExecutionMirror} from '@/lib/report-core';
 export const dynamic='force-dynamic';
 const send=(x:unknown,status=200)=>Response.json(x,{status,headers:{'cache-control':'no-store'}});
-export async function GET(request:Request){try{await authorizeCmsUser('users');const key=new URL(request.url).searchParams.get('effectKey');if(!key||!/^[a-f0-9]{64}$/.test(key))throw new CmsError(400,'מפתח ביצוע אינו תקין');return send({receipt:await new ExecutionStore(getD1()).receipt(key)});}catch(e){return failure(e);}}
+export async function GET(request:Request){try{await authorizeCmsUser('users');const params=new URL(request.url).searchParams,db=getD1(),scope=siteScope(),seo=new SeoDraftStore(db);
+ if(params.has('seoTourId')){if(params.size!==1)throw new CmsError(400,'בקשת SEO אינה תקינה');return send(await seo.readback(scope,params.get('seoTourId')!));}
+ const key=params.get('effectKey');if(params.size!==1||!key||!/^[a-f0-9]{64}$/.test(key))throw new CmsError(400,'מפתח ביצוע אינו תקין');return send({receipt:await new ExecutionStore(db).receipt(key)??await seo.receipt(scope,key)});
+ }catch(e){return failure(e);}}
 export async function POST(request:Request){
  let release:(()=>Promise<unknown>)|undefined;
  try{
@@ -22,7 +29,7 @@ export async function POST(request:Request){
   const db=getD1(),scope=siteScope(),store=new ExecutionStore(db);
   if(body.operation==='rollback'){
    requireSameOrigin(request);const user=await authorizeCmsUser('users');
-   return send({receipt:await store.rollback(scope,body.effectKey,body.expectedRevision,user.userId)});
+   const seo=new SeoDraftStore(db);return send({receipt:await seo.receipt(scope,body.effectKey)?await seo.rollbackSeo(scope,body.effectKey,body.expectedRevision,user.userId):await store.rollback(scope,body.effectKey,body.expectedRevision,user.userId)});
   }
   await verifySignature(raw,request.headers.get('x-bridge-time'),request.headers.get('x-bridge-signature'),(env as unknown as {CMS_EXECUTION_SECRET?:string}).CMS_EXECUTION_SECRET);
   await assertIsolatedD1Scope(db);
@@ -41,6 +48,10 @@ export async function POST(request:Request){
   release=()=>db.prepare("DELETE FROM cms_settings WHERE key='execution_gateway_lock' AND value=?").bind(lockValue).run();
   const checkpoint=await db.prepare("SELECT value FROM cms_settings WHERE key='execution_gateway_checkpoint'").first<{value:string}>();
   if(checkpoint&&Number(checkpoint.value)>Number(request.headers.get('x-bridge-time')))throw new CmsError(409,'תמונת השרת ישנה מסנכרון קודם');
+  const contactConfig=env as unknown as ContactDeliveryConfig&{BUCKET?:R2Bucket};
+  // Bounded maintenance shares the authenticated scope and existing request lock.
+  await maintainContacts(db,contactConfig.BUCKET,scope,contactConfig);
+  await dispatchOneContact(db,contactConfig.BUCKET,scope,contactConfig);
   const tasksStore=new D1Tasks(db),tasks=new Tasks(tasksStore),actor={email:'service:execution@derech.invalid',isAdmin:true},taskResults=[];
   for(const snapshot of body.tasks){
    const previous=await tasksStore.get(scope,String(snapshot.externalId));
@@ -51,6 +62,7 @@ export async function POST(request:Request){
   }
   const receipts=[];
   for(const effect of body.effects){try{
+   if(effect?.kind==='seo_draft'){receipts.push(await new SeoDraftStore(db).applySeo(scope,effect));continue;}
    const checked=effectOf(effect);
    if(!await store.get(scope,'tour',checked.target)){
     const initial=seed.records.find(x=>x.kind==='tour'&&x.id===checked.target);
@@ -64,4 +76,4 @@ export async function POST(request:Request){
   return send({receipts,commands:(await tasksStore.commands(scope)).filter(c=>c.state==='pending'),tasks:taskResults,receivedAt:new Date().toISOString()});
  }catch(e){return failure(e);}finally{if(release)await release();}
 }
-function failure(e:unknown){return jsonError(e instanceof CollectionError||e instanceof TaskError?new CmsError(e.status,e.message):e);}
+function failure(e:unknown){return jsonError(e instanceof CollectionError||e instanceof TaskError||e instanceof ContactError?new CmsError(e.status,e.message):e);}

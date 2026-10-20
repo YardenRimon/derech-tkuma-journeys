@@ -22,7 +22,10 @@
     "build:cloudflare": "node scripts/build-cloudflare.mjs",
     "test:machine-http": "node scripts/test-machine-execution-http.mjs",
     "test:access-workerd": "node scripts/test-cloudflare-access-workerd.mjs",
-    "test:platform-auth": "node scripts/test-platform-auth-provider.mjs && node scripts/test-platform-auth.mjs && node --experimental-strip-types scripts/test-platform-auth-boundary.mjs && node scripts/test-platform-membership.mjs && node scripts/test-login-ui.mjs && node scripts/test-platform-auth-live.mjs && node scripts/test-platform-auth-policy.mjs"
+    "test:platform-auth": "node scripts/test-platform-auth-provider.mjs && node scripts/test-platform-auth.mjs && node --experimental-strip-types scripts/test-platform-auth-boundary.mjs && node scripts/test-platform-membership.mjs && node scripts/test-login-ui.mjs && node scripts/test-platform-auth-live.mjs && node scripts/test-platform-auth-policy.mjs",
+    "test:integrations": "node scripts/test-contact-controls.mjs && node scripts/test-contact-execution.mjs && node --experimental-strip-types scripts/test-seo-drafts.mjs && node scripts/test-seo-machine.mjs && node --experimental-strip-types scripts/test-payments.mjs",
+    "test:production": "node scripts/test-production-profile.mjs && node scripts/test-production-workerd.mjs && node scripts/test-production-live.mjs && node ../production/test-production-cd-policy.mjs",
+    "test:browser": "node scripts/test-production-consent-browser.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
@@ -65,6 +68,7 @@
     "eslint": "9.39.4",
     "eslint-config-next": "16.3.4",
     "json-rpc-2.0": "1.7.1",
+    "playwright": "1.62.1",
     "raw-body": "3.0.2",
     "react-server-dom-webpack": "19.2.6",
     "tailwindcss": "4.2.1",

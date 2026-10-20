@@ -21,6 +21,7 @@ export function validateCloudflareConfig(config){
  if(vars.CMS_BACKUP_BUCKET_SCOPE!=='deployment-isolated')errors.push('CMS_BACKUP_BUCKET_SCOPE must explicitly attest deployment-isolated storage');
  if(vars.CMS_ADAPTER_MODE!=='isolated-d1'||vars.CMS_TENANT_ID!=='derech'||vars.CMS_SITE_ID!=='derech-main'||vars.PLATFORM_RELEASE_STAGE!=='review')errors.push('Isolated derech/derech-main review scope required');
  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(vars.CMS_OWNER_EMAIL??''))errors.push('Configured CMS owner email required');
+ if((vars.CONTACT_RETENTION_DAYS!==undefined||vars.CONTACT_PRIVACY_AUTHORITY_ID!==undefined)&&(vars.CONTACT_RETENTION_DAYS!=='30'||!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(vars.CONTACT_PRIVACY_AUTHORITY_ID??'')))errors.push('Contact retention30days and valid immutable privacy authority pin must be configured together');
  if(Object.keys(vars).some(key=>/(?:SECRET|PASSWORD|TOKEN|PRIVATE_KEY|CREDENTIAL)/.test(key)))errors.push('Runtime secrets must use provider secret storage, never config vars');
  if(errors.length)throw new Error('Cloudflare config blocked:\n- '+errors.join('\n- '));return config;
 }
@@ -35,6 +36,8 @@ export function releasePlan(environment,config){assertNode24();validateCloudflar
  [process.execPath,['--experimental-strip-types','scripts/test-visitor-policy.mjs'],base],
  [process.execPath,['--experimental-strip-types','scripts/test-contact-client.mjs'],base],
  [process.execPath,['scripts/test-contact-http.mjs'],base],
+ ['npm',['run','test:integrations'],base],
+ ['npm',['run','test:production'],base],
  ['npm',['run','build'],{...base,PLATFORM_DEPLOY_TARGET:'cloudflare',PLATFORM_RELEASE_SHA:sha,PLATFORM_CF_CONFIG_PATH:environment.PLATFORM_CF_CONFIG_PATH??path.join(projectRoot,'wrangler.cloudflare.json')}],
  [process.execPath,['scripts/verify-cloudflare-size.mjs'],base],
  ];}

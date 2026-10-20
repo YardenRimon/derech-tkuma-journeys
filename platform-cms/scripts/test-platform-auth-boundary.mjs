@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { stripIdentityHeaders, platformAuthBoundary, isCmsBrowserPath } from '../build/platform-auth-boundary.ts';
 const origin='https://fixture.workers.dev';
 const identity={userId:'verified-subject',email:'owner@example.invalid',displayName:'בעלים',fullName:'בעלים',aal:'aal2'};
-for(const path of ['/admin','/admin/collections/','/api/cms/upload/','/api/users/','/api/tasks/','/api/reports/','/api/execution/'])assert(isCmsBrowserPath(path));
+for(const path of ['/admin','/admin/collections/','/api/cms/upload/','/api/users/','/api/tasks/','/api/reports/','/api/execution/','/api/contact/manage','/api/contact/manage/'])assert(isCmsBrowserPath(path));
 for(const path of ['/','/login/','/auth/callback/','/api/auth/session/','/api/machine/execution/','/api/backup/','/api/public/collections/','/media/fixture'])assert(!isCmsBrowserPath(path));
 const source=new Request(origin+'/api/cms/upload/',{method:'POST',headers:{'oai-authenticated-user-id':'forged','x-platform-authenticated-id':'forged','x-platform-authenticated-email':'owner@example.invalid','x-platform-authenticated-aal':'aal2','content-type':'image/webp'},body:new Uint8Array([1,2,3,254])});
 const stripped=stripIdentityHeaders(source);

@@ -1,10 +1,10 @@
 name: Shared CMS checks
 on:
   pull_request:
-    paths: ['platform-cms/**', 'production/**', 'scripts/*site*.py', 'scripts/*site*.mjs', 'scripts/cms-backup-*.py', 'scripts/*backup*.py', 'scripts/verify-cms-r2-recovery.py', 'backup-receiver/**', '.github/workflows/site-*.yml']
+    paths: ['platform-cms/**', 'production/**', 'scripts/*site*.py', 'scripts/*site*.mjs', 'scripts/cms-backup-*.py', 'scripts/*backup*.py', 'scripts/verify-cms-r2-recovery.py', 'backup-receiver/**', 'independent-monitor/**', '.github/workflows/site-*.yml']
   push:
     branches: [main, production-foundation-20261019]
-    paths: ['platform-cms/**', 'production/**', 'scripts/*site*.py', 'scripts/*site*.mjs', 'scripts/cms-backup-*.py', 'scripts/*backup*.py', 'scripts/verify-cms-r2-recovery.py', 'backup-receiver/**', '.github/workflows/site-*.yml']
+    paths: ['platform-cms/**', 'production/**', 'scripts/*site*.py', 'scripts/*site*.mjs', 'scripts/cms-backup-*.py', 'scripts/*backup*.py', 'scripts/verify-cms-r2-recovery.py', 'backup-receiver/**', 'independent-monitor/**', '.github/workflows/site-*.yml']
 permissions:
   contents: read
 concurrency:
@@ -14,7 +14,7 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -38,6 +38,7 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Verify encrypted backup receiver security and local storage
         run: |
+          node independent-monitor/test-worker.mjs --workerd
           node backup-receiver/test-worker.mjs
           python3 -m unittest discover -s backup-receiver -p 'test_*.py'
           node backup-receiver/test-r2-local.mjs
@@ -57,6 +58,14 @@ jobs:
           node --experimental-strip-types scripts/test-visitor-policy.mjs
           node --experimental-strip-types scripts/test-contact-client.mjs
           node scripts/test-contact-http.mjs
+          npm run test:integrations
+          npm run test:production
+      - name: Install pinned isolated test browser
+        working-directory: platform-cms
+        run: npx playwright install --with-deps --only-shell chromium
+      - name: Verify consent and mobile behavior with every provider intercepted
+        working-directory: platform-cms
+        run: npm run test:browser
       - name: Verify real local HTTP lifecycle and public projections
         working-directory: platform-cms
         run: |

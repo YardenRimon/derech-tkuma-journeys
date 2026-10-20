@@ -1,7 +1,8 @@
+import {parseContactPrivacyKey,R2ContactPrivacy} from './contact-privacy';
 /** Read-only backup of the deployment-isolated pilot. No SQL or scope is caller-selected. */
 export class BackupError extends Error { status:number; constructor(status:number,message:string){super(message);this.status=status;} }
 export const backupPurpose='cms-backup-v1';
-export const backupMigrations=[{"name":"0000_many_starhawk.sql","sha256":"5632baa062a554bc620b7c9d913677e2da7613674167cfc5aad20eb344bb77f5"},{"name":"0001_wooden_wong.sql","sha256":"c76d87e9abef517f47a29726d80e7ef962a17f5291ba4919b04cecbb1108e291"},{"name":"0002_certain_kulan_gath.sql","sha256":"e1a86b3e2aaa88141d5d6ed9e4de5352673d3ee944cf241398aaf00e0369a6c5"},{"name":"0003_collections.sql","sha256":"8ecb67585ed18309daae45bfead90114bb13bda8e2c8aa9508161dce67826514"},{"name":"0004_isolated_adapter.sql","sha256":"bebc5c0a6ee57f0f4485c6b4ee9aa4b78ae688eff0ef6eece0ef6993516e05f5"},{"name":"0005_yummy_wither.sql","sha256":"ddaeb5ef9f0de1f226da5f10a37f5d3d507bb9087037cbcebbb3e9bd099163ab"},{"name":"0006_platform_auth.sql","sha256":"6751646c47d0335f2ea3e09833007c0aaa3030b7833aebd7881d46b690c655ea"}];
+export const backupMigrations=[{"name":"0000_many_starhawk.sql","sha256":"5632baa062a554bc620b7c9d913677e2da7613674167cfc5aad20eb344bb77f5"},{"name":"0001_wooden_wong.sql","sha256":"c76d87e9abef517f47a29726d80e7ef962a17f5291ba4919b04cecbb1108e291"},{"name":"0002_certain_kulan_gath.sql","sha256":"e1a86b3e2aaa88141d5d6ed9e4de5352673d3ee944cf241398aaf00e0369a6c5"},{"name":"0003_collections.sql","sha256":"8ecb67585ed18309daae45bfead90114bb13bda8e2c8aa9508161dce67826514"},{"name":"0004_isolated_adapter.sql","sha256":"bebc5c0a6ee57f0f4485c6b4ee9aa4b78ae688eff0ef6eece0ef6993516e05f5"},{"name":"0005_yummy_wither.sql","sha256":"ddaeb5ef9f0de1f226da5f10a37f5d3d507bb9087037cbcebbb3e9bd099163ab"},{"name":"0006_platform_auth.sql","sha256":"6751646c47d0335f2ea3e09833007c0aaa3030b7833aebd7881d46b690c655ea"},{"name":"0008_contact_controls.sql","sha256":"2d62b25c3902d5b94e169eb02fb2d4509be30bea37873a58a47f27c003bb98d1"}];
 export const backupTables=[
  ['cms_deployment_scope','singleton'],['cms_settings','key'],['cms_users','email'],['cms_permission_audit','id'],['cms_pages','slug'],['cms_versions','slug,version'],
  ['cms_records','tenant_id,site_id,kind,id'],['cms_record_history','tenant_id,site_id,kind,id,version'],['cms_task_mirrors','tenant_id,site_id,external_id'],['cms_task_commands','tenant_id,site_id,command_key'],['cms_task_audit','tenant_id,site_id,external_id,revision'],
@@ -31,15 +32,36 @@ export function backupRequest(value:unknown,scope:BackupScope):{operation:'snaps
 export async function assertBackupScope(db:D1Database,scope:BackupScope){const row=await db.prepare('SELECT tenant_id,site_id FROM cms_deployment_scope WHERE singleton=1').first<{tenant_id:string;site_id:string}>();if(!row||row.tenant_id!==scope.tenantId||row.site_id!==scope.siteId)throw new BackupError(503,'Backup deployment scope does not match');}
 // R2 metadata exposes optional undefined fields and Date values. Normalize it
 // to its actual JSON wire representation before hashing the backup snapshot.
-export async function backupInventory(bucket:R2Bucket){
- const objects:{key:string;size:number;etag:string;uploaded:string;httpMetadata:R2HTTPMetadata;customMetadata:{[key:string]:string}}[]=[];let cursor:string|undefined;const seen=new Set<string>();
- do{const result=await bucket.list({limit:1000,cursor});for(const object of result.objects){if(!backupUuid.test(object.key))throw new BackupError(503,'Bucket isolation validation failed: unexpected object key');const head=await bucket.head(object.key);if(!head||head.etag!==object.etag||head.size!==object.size)throw new BackupError(409,'Media changed during inventory');objects.push({key:head.key,size:head.size,etag:head.etag,uploaded:head.uploaded.toISOString(),httpMetadata:JSON.parse(JSON.stringify(head.httpMetadata??{})) as R2HTTPMetadata,customMetadata:head.customMetadata??{}});}
- if(objects.length>10000)throw new BackupError(507,'Backup inventory exceeds supported memory bound; no partial backup returned');
- if(!result.truncated)break;cursor=result.cursor;if(!cursor||seen.has(cursor))throw new BackupError(503,'Incomplete object inventory');seen.add(cursor);
+export type BackupPrivacyConfig={contactPrivacyAuthorityId?:string};
+export async function backupInventory(bucket:R2Bucket,scope:BackupScope,config:BackupPrivacyConfig={}){
+ const objects:{key:string;size:number;etag:string;uploaded:string;httpMetadata:R2HTTPMetadata;customMetadata:{[key:string]:string}}[]=[];
+ let cursor:string|undefined;const seen=new Set<string>(),keys=new Set<string>(),privacy=new R2ContactPrivacy(bucket,config.contactPrivacyAuthorityId);
+ // A configured authority is mandatory even if an empty/replaced bucket lists
+ // no private keys. Never infer an initialized erasure authority from absence.
+ if(config.contactPrivacyAuthorityId!==undefined)try{await privacy.check(scope);}catch{throw new BackupError(503,'Contact privacy authority validation failed');}
+ do{
+  const result=await bucket.list({limit:1000,cursor});
+  for(const object of result.objects){
+   if(keys.has(object.key))throw new BackupError(503,'Duplicate object inventory');keys.add(object.key);
+   if(keys.size>10000)throw new BackupError(507,'Backup inventory exceeds supported memory bound; no partial backup returned');
+   const privateKey=parseContactPrivacyKey(object.key);
+   if(!backupUuid.test(object.key)&&(!privateKey||privateKey.scope.tenantId!==scope.tenantId||privateKey.scope.siteId!==scope.siteId))throw new BackupError(503,'Bucket isolation validation failed: unexpected object key');
+   const head=await bucket.head(object.key);
+   if(!head||head.key!==object.key||head.etag!==object.etag||head.size!==object.size)throw new BackupError(409,'Stored object changed during inventory');
+   if(privateKey){
+    // Exact shared classifier plus pinned authority/body validation. These
+    // immutable objects are independent of archives and must never be media.
+    try{await privacy.check(scope);if(privateKey.kind==='marker'&&!await privacy.get(scope,privateKey.key))throw new Error('marker_missing');}catch{throw new BackupError(503,'Contact privacy object validation failed');}
+    const unchanged=await bucket.head(object.key);if(!unchanged||unchanged.etag!==head.etag||unchanged.size!==head.size)throw new BackupError(409,'Contact privacy object changed during inventory');
+    continue;
+   }
+   objects.push({key:head.key,size:head.size,etag:head.etag,uploaded:head.uploaded.toISOString(),httpMetadata:JSON.parse(JSON.stringify(head.httpMetadata??{})) as R2HTTPMetadata,customMetadata:head.customMetadata??{}});
+  }
+  if(!result.truncated)break;cursor=result.cursor;if(!cursor||seen.has(cursor))throw new BackupError(503,'Incomplete object inventory');seen.add(cursor);
  }while(true);objects.sort((a,b)=>a.key.localeCompare(b.key));return objects;
 }
-export async function exportBackup(db:D1Database,bucket:R2Bucket,scope:BackupScope,release:unknown){
- await assertBackupScope(db,scope);const inventory=await backupInventory(bucket);
+export async function exportBackup(db:D1Database,bucket:R2Bucket,scope:BackupScope,release:unknown,config:BackupPrivacyConfig={}){
+ await assertBackupScope(db,scope);const inventory=await backupInventory(bucket,scope,config);
  // D1 batch executes these reads in one transaction. Count equality detects any provider truncation.
  const queries=[db.prepare("SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE name LIKE 'cms_%' ORDER BY type,name"),db.prepare("SELECT name,seq FROM sqlite_sequence WHERE name LIKE 'cms_%' ORDER BY name")];
  for(const [name,order]of backupTables){const where=scoped.has(name)?' WHERE tenant_id=? AND site_id=?':'';for(const sql of [`PRAGMA table_info(${name})`,`SELECT COUNT(*) AS n FROM ${name}${where}`,`SELECT * FROM ${name}${where} ORDER BY ${order}`]){let stmt=db.prepare(sql);if(where&&!sql.startsWith('PRAGMA'))stmt=stmt.bind(scope.tenantId,scope.siteId);queries.push(stmt);}if(scoped.has(name))queries.push(db.prepare(`SELECT COUNT(*) AS n FROM ${name} WHERE tenant_id<>? OR site_id<>?`).bind(scope.tenantId,scope.siteId));}
@@ -54,9 +76,9 @@ export async function exportBackup(db:D1Database,bucket:R2Bucket,scope:BackupSco
  tables.push({name,columns,count,rows,sha256:await sha256(canonical(rows))});}
  const deployment=tables[0].rows as {singleton:number;tenant_id:string;site_id:string}[];
  if(deployment.length!==1||deployment[0].tenant_id!==scope.tenantId||deployment[0].site_id!==scope.siteId)throw new BackupError(503,'Snapshot deployment scope does not match');
- if(canonical(inventory)!==canonical(await backupInventory(bucket)))throw new BackupError(409,'Media inventory changed during snapshot; retry later');
+ if(canonical(inventory)!==canonical(await backupInventory(bucket,scope,config)))throw new BackupError(409,'Media inventory changed during snapshot; retry later');
  const knownMedia=new Set(inventory.map(object=>object.key));for(const table of tables)for(const match of canonical(table.rows).replaceAll('\\/','/').matchAll(/\/media\/([0-9a-f-]{36})/gi)){if(!knownMedia.has(match[1].toLowerCase()))throw new BackupError(503,'A database media reference has no stored object');}
- const snapshot={format:backupPurpose,schemaVersion:1,scope,createdAt:new Date().toISOString(),release,migrations:backupMigrations,schema,sqliteSequence:results[1].results,tables,media:inventory,consistency:'transactional-d1-batch-and-stable-r2-inventory',excludes:['environment secrets','provider-internal tables','static source assets (separate source archive)','platform_auth_rate_limits (transient abuse counters; recreated empty)','managed identity provider users, passwords and MFA (provider owned)']};
+ const snapshot={format:backupPurpose,schemaVersion:1,scope,createdAt:new Date().toISOString(),release,migrations:backupMigrations,schema,sqliteSequence:results[1].results,tables,media:inventory,consistency:'transactional-d1-batch-and-stable-r2-inventory',excludes:['environment secrets','provider-internal tables','static source assets (separate source archive)','platform_auth_rate_limits (transient abuse counters; recreated empty)','contact_rate_limits (transient abuse counters; recreated empty)','contact erasure authority and markers (independent private R2; preserve unchanged during restore)','managed identity provider users, passwords and MFA (provider owned)']};
  const serialized=canonical(snapshot);if(new TextEncoder().encode(serialized).length>20*1024*1024)throw new BackupError(507,'Snapshot exceeds supported 20MiB bound; no partial backup returned');
  return {snapshot,sha256:await sha256(serialized)};
 }

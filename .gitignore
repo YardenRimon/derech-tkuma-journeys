@@ -10,3 +10,7 @@ legacy-materials/
 /platform-cms/public/wp-includes/
 /platform-cms/public/_external/
 /platform-cms/public/_optimized/
+
+# Private operational evidence and local provider state are never public source.
+/audit/
+/.wrangler/

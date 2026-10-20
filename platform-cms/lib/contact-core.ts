@@ -9,8 +9,20 @@ export const CONTACT_FORMS = {
 } as const;
 export type ContactScope = {tenantId:string;siteId:string};
 export type ContactInput = {idempotencyKey:string;formId:keyof typeof CONTACT_FORMS;fullName:string;phone:string;email:string;consent:{contact:true;policyVersion:typeof CONTACT_POLICY};honeypot:string};
-export type ContactRecord = {schema:1;scope:ContactScope;key:string;receipt:string;fingerprint:string;source:{formId:string;postId:string};fields:{fullName:string;phone:string;email:string};consent:{contact:true;policyVersion:string;receivedAt:string};createdAt:string;revision:number;outbox:{state:'pending_routing'|'sending'|'provider_accepted'|'unknown'|'failed';attemptToken:string|null;contractId:string|null;receiptHash:string|null}};
-export interface ContactStore {get(scope:ContactScope,key:string):Promise<ContactRecord|null>;insert(record:ContactRecord):Promise<boolean>;cas(previous:ContactRecord,next:ContactRecord):Promise<boolean>}
+export type ContactRecord = {schema:1;scope:ContactScope;key:string;receipt:string;fingerprint:string;source:{formId:string;postId:string};fields:{fullName:string;phone:string;email:string};consent:{contact:true;policyVersion:string;receivedAt:string};createdAt:string;retention?:{days:number;expiresAt:string};revision:number;outbox:{state:'pending_routing'|'sending'|'provider_accepted'|'unknown'|'failed';attemptToken:string|null;contractId:string|null;receiptHash:string|null}};
+export type ContactTombstone={schema:2;scope:ContactScope;key:string;revision:number;erasedAt:string;reason:'expired'|'requested';actorId:string|null};
+export type ContactStored=ContactRecord|ContactTombstone;
+export type ContactDeletionMarker={schema:1;scope:ContactScope;key:string;erasedAt:string;reason:'expired'|'requested'};
+export interface ContactPrivacy{check(scope:ContactScope):Promise<void>;get(scope:ContactScope,key:string):Promise<ContactDeletionMarker|null>;ensure(marker:ContactDeletionMarker):Promise<ContactDeletionMarker>}
+export interface ContactStore {
+ get(scope:ContactScope,key:string):Promise<ContactStored|null>;
+ insert(record:ContactRecord):Promise<boolean>;
+ cas(previous:ContactStored,next:ContactStored):Promise<boolean>;
+ expired(scope:ContactScope,at:string,legacyCutoff:string,limit:number):Promise<ContactRecord[]>;
+ scan(scope:ContactScope,after:string|null,limit:number):Promise<ContactStored[]>;
+ auditRead(record:ContactRecord,at:string):Promise<void>;
+ cleanAudit(scope:ContactScope,cutoff:string):Promise<void>;
+}
 export class ContactError extends Error {status:number;code:string;constructor(status:number,code:string){super(code);this.status=status;this.code=code;}}
 function fail(status:number,code:string):never{throw new ContactError(status,code);}
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -39,30 +51,95 @@ export function validateContact(value:unknown):ContactInput{
 export async function contactHash(value:unknown){const raw=JSON.stringify(value);return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(raw)))).map(x=>x.toString(16).padStart(2,'0')).join('');}
 export type VerifiedContactRouting={kind:'make';verified:true;contractId:string;scope:ContactScope;formIds:string[]};
 export class Contacts{
- store:ContactStore;
- constructor(store:ContactStore){this.store=store;}
- async submit(scope:ContactScope,value:unknown,now=new Date()){
+ store:ContactStore;days:number;privacy:ContactPrivacy;
+ constructor(store:ContactStore,days:number,privacy:ContactPrivacy){
+  if(!Number.isSafeInteger(days)||days<1||days>3650)fail(503,'retention_unconfigured');
+  if(!privacy)fail(503,'contact_privacy_unavailable');this.store=store;this.days=days;this.privacy=privacy;
+ }
+ private expiresAt(record:ContactRecord){
+  const value=record.retention?.expiresAt??new Date(Date.parse(record.createdAt)+this.days*86400000).toISOString();
+  if(!Number.isFinite(Date.parse(value)))fail(503,'contact_unavailable');return Math.min(Date.parse(value),Date.parse(record.createdAt)+this.days*86400000);
+ }
+ private async redactMarker(scope:ContactScope,key:string,marker:ContactDeletionMarker){
+  const previous=await this.store.get(scope,key);if(!previous||previous.schema===2)return;
+  const next:ContactTombstone={schema:2,scope:{...scope},key,revision:previous.revision+1,erasedAt:marker.erasedAt,reason:marker.reason,actorId:null};
+  if(!await this.store.cas(previous,next))fail(409,'contact_revision_conflict');
+ }
+ private async assertUnmarked(scope:ContactScope,key:string){
+  const marker=await this.privacy.get(scope,key);
+  if(marker){await this.redactMarker(scope,key,marker);fail(410,'submission_erased');}
+ }
+ async reconcile(scope:ContactScope,limit=100,after:string|null=null,now=new Date()){
+  contactScope(scope);if(!Number.isSafeInteger(limit)||limit<1||limit>100||after!==null&&!uuid.test(after))fail(400,'invalid_submission');
+  await this.privacy.check(scope);const rows=await this.store.scan(scope,after,limit);let redacted=0;
+  for(const record of rows){
+   if(record.schema===2){await this.privacy.ensure({schema:1,scope:{...scope},key:record.key,erasedAt:record.erasedAt,reason:record.reason});continue;}
+   const marker=await this.privacy.get(scope,record.key);
+   if(marker){await this.redactMarker(scope,record.key,marker);redacted++;}
+   else if(this.expiresAt(record)<=now.getTime()){await this.erase(scope,record.key,record.revision,'expired',now);redacted++;}
+  }
+  return{scanned:rows.length,redacted,nextCursor:rows.length===limit?rows.at(-1)!.key:null};
+ }
+ private async live(scope:ContactScope,key:string,now:Date){
+  contactScope(scope);if(!uuid.test(key))fail(400,'invalid_idempotency_key');key=key.toLowerCase();await this.assertUnmarked(scope,key);const record=await this.store.get(scope,key);
+  if(!record)fail(404,'not_found');
+  if(record.schema===2){await this.privacy.ensure({schema:1,scope:{...scope},key,erasedAt:record.erasedAt,reason:record.reason});fail(410,'submission_erased');}
+  if(this.expiresAt(record)<=now.getTime()){
+   await this.erase(scope,key,record.revision,'expired',now);
+   fail(410,'submission_erased');
+  }
+  return record;
+ }
+ async submit(scope:ContactScope,value:unknown,now=new Date(),reserveNew?:()=>Promise<void>){
   contactScope(scope);const input=validateContact(value),source={formId:input.formId,postId:CONTACT_FORMS[input.formId].postId};
+  await this.assertUnmarked(scope,input.idempotencyKey);
   const fields={fullName:input.fullName,phone:input.phone,email:input.email};
   const fingerprint=await contactHash({scope,source,fields,consent:input.consent});
-  let previous=await this.store.get(scope,input.idempotencyKey);
-  if(previous){if(previous.fingerprint!==fingerprint)fail(409,'idempotency_conflict');return this.publicReceipt(previous);}
-  const at=now.toISOString();const record:ContactRecord={schema:1,scope:{...scope},key:input.idempotencyKey,receipt:crypto.randomUUID(),fingerprint,source,fields,consent:{...input.consent,receivedAt:at},createdAt:at,revision:1,outbox:{state:'pending_routing',attemptToken:null,contractId:null,receiptHash:null}};
-  if(!await this.store.insert(record)){previous=await this.store.get(scope,input.idempotencyKey);if(!previous||previous.fingerprint!==fingerprint)fail(409,'idempotency_conflict');return this.publicReceipt(previous);}
-  return this.publicReceipt(record);
+  const replay=async()=>{
+   const previous=await this.live(scope,input.idempotencyKey,now);
+   if(previous.fingerprint!==fingerprint)fail(409,'idempotency_conflict');return this.publicReceipt(previous);
+  };
+  if(await this.store.get(scope,input.idempotencyKey))return replay();
+  // Runs before the INSERT. A rejection cannot leave a durable lead.
+  if(reserveNew)await reserveNew();
+  const at=now.toISOString(),record:ContactRecord={schema:1,scope:{...scope},key:input.idempotencyKey,receipt:crypto.randomUUID(),fingerprint,source,fields,consent:{...input.consent,receivedAt:at},createdAt:at,retention:{days:this.days,expiresAt:new Date(now.getTime()+this.days*86400000).toISOString()},revision:1,outbox:{state:'pending_routing',attemptToken:null,contractId:null,receiptHash:null}};
+  if(!await this.store.insert(record))return replay();return this.publicReceipt(record);
  }
  publicReceipt(record:ContactRecord){return{accepted:true as const,receipt:record.receipt,state:'stored_pending_processing' as const};}
- async claim(scope:ContactScope,key:string,expectedRevision:number,routing:VerifiedContactRouting|null){
+ async read(scope:ContactScope,key:string,now=new Date()){
+  const record=await this.live(scope,key,now);
+  await this.store.auditRead(record,now.toISOString());await this.assertUnmarked(scope,record.key);return record;
+ }
+ async erase(scope:ContactScope,key:string,expectedRevision:number,reason:'expired'|'requested',now=new Date(),actorId:string|null=null){
+  contactScope(scope);if(!uuid.test(key))fail(400,'invalid_idempotency_key');key=key.toLowerCase();const previous=await this.store.get(scope,key);if(!previous)fail(404,'not_found');
+  if(previous.schema===2){await this.privacy.ensure({schema:1,scope:{...scope},key,erasedAt:previous.erasedAt,reason:previous.reason});return previous;}
+  if(previous.revision!==expectedRevision)fail(409,'contact_revision_conflict');
+  if(reason==='expired'&&this.expiresAt(previous)>now.getTime())fail(409,'contact_revision_conflict');
+  // No fields, consent, receipt, payload fingerprint or delivery tokens survive.
+  // The opaque UUID is retained so a late retry cannot resurrect deleted PII.
+  const marker=await this.privacy.ensure({schema:1,scope:{...scope},key,erasedAt:now.toISOString(),reason});
+  const next:ContactTombstone={schema:2,scope:{...scope},key,revision:previous.revision+1,erasedAt:marker.erasedAt,reason:marker.reason,actorId};
+  if(!await this.store.cas(previous,next))fail(409,'contact_revision_conflict');return next;
+ }
+ async expire(scope:ContactScope,limit=100,now=new Date()){
+  contactScope(scope);if(!Number.isSafeInteger(limit)||limit<1||limit>100)fail(400,'invalid_submission');
+  await this.privacy.check(scope);const cutoff=new Date(now.getTime()-this.days*86400000).toISOString(),rows=await this.store.expired(scope,now.toISOString(),cutoff,limit);
+  let erased=0,conflicts=0;
+  for(const record of rows){try{await this.erase(scope,record.key,record.revision,'expired',now);erased++;}catch(error){if(error instanceof ContactError&&error.status===409)conflicts++;else throw error;}}
+  await this.store.cleanAudit(scope,cutoff);
+  return{examined:rows.length,erased,conflicts,batchLimit:limit};
+ }
+ async claim(scope:ContactScope,key:string,expectedRevision:number,routing:VerifiedContactRouting|null,now=new Date()){
   contactScope(scope);
   if(!routing||routing.kind!=='make'||routing.verified!==true||!/^[a-f0-9]{64}$/.test(routing.contractId)||routing.scope.tenantId!==scope.tenantId||routing.scope.siteId!==scope.siteId)fail(503,'routing_unverified');
-  const record=await this.store.get(scope,key);if(!record)fail(404,'not_found');
+  const record=await this.live(scope,key,now);
   if(!routing.formIds.includes(record.source.formId)||record.revision!==expectedRevision||record.outbox.state!=='pending_routing')fail(409,'delivery_conflict');
   const next:ContactRecord={...record,revision:record.revision+1,outbox:{state:'sending',attemptToken:crypto.randomUUID(),contractId:routing.contractId,receiptHash:null}};
-  if(!await this.store.cas(record,next))fail(409,'delivery_conflict');return next;
+  if(!await this.store.cas(record,next))fail(409,'delivery_conflict');await this.assertUnmarked(scope,key);return next;
  }
- async settle(scope:ContactScope,key:string,token:string,outcome:'provider_accepted'|'unknown'|'failed',receiptHash:string|null=null){
+ async settle(scope:ContactScope,key:string,token:string,outcome:'provider_accepted'|'unknown'|'failed',receiptHash:string|null=null,now=new Date()){
   contactScope(scope);if(!['provider_accepted','unknown','failed'].includes(outcome)||receiptHash!==null&&!/^[a-f0-9]{64}$/.test(receiptHash)||outcome==='provider_accepted'&&!receiptHash)fail(400,'invalid_delivery_receipt');
-  const previous=await this.store.get(scope,key);if(!previous||previous.outbox.state!=='sending'||previous.outbox.attemptToken!==token)fail(409,'delivery_conflict');
+  const previous=await this.live(scope,key,now);if(previous.outbox.state!=='sending'||previous.outbox.attemptToken!==token)fail(409,'delivery_conflict');
   const next:ContactRecord={...previous,revision:previous.revision+1,outbox:{...previous.outbox,state:outcome,receiptHash}};
   if(!await this.store.cas(previous,next))fail(409,'delivery_conflict');return next;
  }
@@ -74,13 +151,17 @@ export type ContactConfig={CONTACT_MODE?:string;CONTACT_ORIGIN?:string};
 export function contactEnabled(config:ContactConfig,requestOrigin:string){
  if(config.CONTACT_MODE!=='receive-only'||!config.CONTACT_ORIGIN||!['https://derech-tkuma.com','https://www.derech-tkuma.com'].includes(config.CONTACT_ORIGIN)||requestOrigin!==config.CONTACT_ORIGIN)fail(503,'contact_disabled');
 }
-export async function readContactRequest(request:Request,config:ContactConfig){
+export function checkContactRequest(request:Request,config:ContactConfig){
  const url=new URL(request.url);contactEnabled(config,url.origin);
  if(url.search||request.headers.get('origin')!==url.origin||!['same-origin','none'].includes(request.headers.get('sec-fetch-site')??'same-origin'))fail(403,'origin_rejected');
  if(!/^application\/json(?:\s*;|$)/i.test(request.headers.get('content-type')??''))fail(415,'json_required');
+}
+export async function readContactJson(request:Request){
  const reader=request.body?.getReader();if(!reader)fail(400,'invalid_submission');
  const chunks:Uint8Array[]=[];let size=0;
  for(;;){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>10000){await reader.cancel();fail(413,'request_too_large');}chunks.push(value);}
  const bytes=new Uint8Array(size);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}
  try{return JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes)) as unknown;}catch{return fail(400,'invalid_submission');}
 }
+
+export async function readContactRequest(request:Request,config:ContactConfig){checkContactRequest(request,config);return readContactJson(request);}
