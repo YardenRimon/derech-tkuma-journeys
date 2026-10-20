@@ -29,9 +29,11 @@ export function backupRequest(value:unknown,scope:BackupScope):{operation:'snaps
  return {operation:'object',key:v.key,etag:v.etag};
 }
 export async function assertBackupScope(db:D1Database,scope:BackupScope){const row=await db.prepare('SELECT tenant_id,site_id FROM cms_deployment_scope WHERE singleton=1').first<{tenant_id:string;site_id:string}>();if(!row||row.tenant_id!==scope.tenantId||row.site_id!==scope.siteId)throw new BackupError(503,'Backup deployment scope does not match');}
+// R2 metadata exposes optional undefined fields and Date values. Normalize it
+// to its actual JSON wire representation before hashing the backup snapshot.
 export async function backupInventory(bucket:R2Bucket){
  const objects:{key:string;size:number;etag:string;uploaded:string;httpMetadata:R2HTTPMetadata;customMetadata:{[key:string]:string}}[]=[];let cursor:string|undefined;const seen=new Set<string>();
- do{const result=await bucket.list({limit:1000,cursor});for(const object of result.objects){if(!backupUuid.test(object.key))throw new BackupError(503,'Bucket isolation validation failed: unexpected object key');const head=await bucket.head(object.key);if(!head||head.etag!==object.etag||head.size!==object.size)throw new BackupError(409,'Media changed during inventory');objects.push({key:head.key,size:head.size,etag:head.etag,uploaded:head.uploaded.toISOString(),httpMetadata:head.httpMetadata??{},customMetadata:head.customMetadata??{}});}
+ do{const result=await bucket.list({limit:1000,cursor});for(const object of result.objects){if(!backupUuid.test(object.key))throw new BackupError(503,'Bucket isolation validation failed: unexpected object key');const head=await bucket.head(object.key);if(!head||head.etag!==object.etag||head.size!==object.size)throw new BackupError(409,'Media changed during inventory');objects.push({key:head.key,size:head.size,etag:head.etag,uploaded:head.uploaded.toISOString(),httpMetadata:JSON.parse(JSON.stringify(head.httpMetadata??{})) as R2HTTPMetadata,customMetadata:head.customMetadata??{}});}
  if(objects.length>10000)throw new BackupError(507,'Backup inventory exceeds supported memory bound; no partial backup returned');
  if(!result.truncated)break;cursor=result.cursor;if(!cursor||seen.has(cursor))throw new BackupError(503,'Incomplete object inventory');seen.add(cursor);
  }while(true);objects.sort((a,b)=>a.key.localeCompare(b.key));return objects;
