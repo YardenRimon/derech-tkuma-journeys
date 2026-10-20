@@ -1,10 +1,10 @@
 name: Shared CMS checks
 on:
   pull_request:
-    paths: ['platform-cms/**', 'production/**', 'scripts/*site*.py', 'scripts/cms-backup-*.py', 'scripts/*backup*.py', 'scripts/verify-cms-r2-recovery.py', 'backup-receiver/**', '.github/workflows/site-*.yml']
+    paths: ['platform-cms/**', 'production/**', 'scripts/*site*.py', 'scripts/*site*.mjs', 'scripts/cms-backup-*.py', 'scripts/*backup*.py', 'scripts/verify-cms-r2-recovery.py', 'backup-receiver/**', '.github/workflows/site-*.yml']
   push:
     branches: [main, production-foundation-20261019]
-    paths: ['platform-cms/**', 'production/**', 'scripts/*site*.py', 'scripts/cms-backup-*.py', 'scripts/*backup*.py', 'scripts/verify-cms-r2-recovery.py', 'backup-receiver/**', '.github/workflows/site-*.yml']
+    paths: ['platform-cms/**', 'production/**', 'scripts/*site*.py', 'scripts/*site*.mjs', 'scripts/cms-backup-*.py', 'scripts/*backup*.py', 'scripts/verify-cms-r2-recovery.py', 'backup-receiver/**', '.github/workflows/site-*.yml']
 permissions:
   contents: read
 concurrency:
@@ -41,6 +41,7 @@ jobs:
           node backup-receiver/test-worker.mjs
           python3 -m unittest discover -s backup-receiver -p 'test_*.py'
           node backup-receiver/test-r2-local.mjs
+          python3 -m unittest discover -s scripts -p 'test_site_review_vps.py'
       - name: Verify pinned build against full source reconstruction
         working-directory: platform-cms
         run: npm run prepare:pages:verify
@@ -53,6 +54,9 @@ jobs:
           npm run check && npm test
           node --experimental-strip-types scripts/test-backup.mjs
           node --experimental-strip-types scripts/test-contact.mjs
+          node --experimental-strip-types scripts/test-visitor-policy.mjs
+          node --experimental-strip-types scripts/test-contact-client.mjs
+          node scripts/test-contact-http.mjs
       - name: Verify real local HTTP lifecycle and public projections
         working-directory: platform-cms
         run: |
@@ -144,6 +148,7 @@ jobs:
           PLATFORM_CF_CONFIG_PATH: ${{ runner.temp }}/derech-cloudflare.json
         run: |
           node scripts/build-cloudflare.mjs
+          node --experimental-strip-types scripts/test-visitor-policy.mjs --artifact
       - name: Refuse a superseded queued source commit
         env:
           GH_READ_TOKEN: ${{ github.token }}

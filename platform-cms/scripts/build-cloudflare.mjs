@@ -32,6 +32,9 @@ export function releasePlan(environment,config){assertNode24();validateCloudflar
  ['npm',['run','check'],base],['npm',['test'],base],
  [process.execPath,['--experimental-strip-types','scripts/test-backup.mjs'],base],
  [process.execPath,['--experimental-strip-types','scripts/test-contact.mjs'],base],
+ [process.execPath,['--experimental-strip-types','scripts/test-visitor-policy.mjs'],base],
+ [process.execPath,['--experimental-strip-types','scripts/test-contact-client.mjs'],base],
+ [process.execPath,['scripts/test-contact-http.mjs'],base],
  ['npm',['run','build'],{...base,PLATFORM_DEPLOY_TARGET:'cloudflare',PLATFORM_RELEASE_SHA:sha,PLATFORM_CF_CONFIG_PATH:environment.PLATFORM_CF_CONFIG_PATH??path.join(projectRoot,'wrangler.cloudflare.json')}],
  [process.execPath,['scripts/verify-cloudflare-size.mjs'],base],
  ];}
