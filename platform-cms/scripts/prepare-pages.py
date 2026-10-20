@@ -8,11 +8,13 @@ recorded so tests can reconstruct every transformed byte from the source.
 from pathlib import Path
 from html.parser import HTMLParser
 from html import unescape, escape
-import json, re, hashlib, gzip, sys
+import json, re, hashlib, gzip, sys, runpy
 ROOT=Path(__file__).resolve().parents[1]
 FIXTURES=ROOT/'source-pages'
 CAPTURE=ROOT.parent/'migration/source-2026-10-19'
 PROVENANCE=FIXTURES/'provenance.json'
+IDENTITIES=FIXTURES/'field-identities.json'
+identity_api=runpy.run_path(str(ROOT/'scripts/field-identities.py'))
 VOID={'img','br','hr','meta','link','input','source','area','base','embed','param','track','wbr'}
 EDIT={'h1','h2','h3','h4','h5','h6','p','span','a','li','strong','b','label','button'}
 POLICY=("default-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.youtube.com; "
@@ -94,12 +96,16 @@ class Annotator(Locations):
   if tag in EDIT and not node['child'] and not node['hidden']:
    text=self.html[node['content']:self.source_offset()]
    if unescape(text).strip() and '<' not in text:node['text']=unescape(text);self.nodes.append(node)
- def annotate(self):
+ def annotate(self,slug=None,registry=None):
   fields={};edits=[]
-  for n in sorted(self.nodes,key=lambda n:n['start']):
-   fid=f'text-{len(fields)+1}';fields[fid]={'type':'text','value':n['text']};edits.append((n['start']+len(n['raw'])-1,f' data-edit-id="{fid}"'))
-  for pos,raw,attrs in self.images:
-   fid=f'image-{len(fields)+1}';fields[fid]={'type':'image','value':attrs['src'],'alt':attrs.get('alt','')};insert=pos+len(raw)-(2 if raw.endswith('/>') else 1);edits.append((insert,f' data-image-id="{fid}"'))
+  nodes=sorted(self.nodes,key=lambda n:n['start'])
+  candidates=[{'type':'text','value':n['text']}for n in nodes]+[{'type':'image','value':attrs['src'],'alt':attrs.get('alt','')}for pos,raw,attrs in self.images]
+  if slug is None:ids=[f"{item['type']}-{index+1}"for index,item in enumerate(candidates)]
+  else:ids,self.retired,self.registry=identity_api['assign_fields'](slug,candidates,registry,source_sha256=sha(self.html))
+  for index,n in enumerate(nodes):
+   fid=ids[index];fields[fid]=candidates[index];edits.append((n['start']+len(n['raw'])-1,f' data-edit-id="{fid}"'))
+  for index,(pos,raw,attrs) in enumerate(self.images,start=len(nodes)):
+   fid=ids[index];fields[fid]=candidates[index];insert=pos+len(raw)-(2 if raw.endswith('/>') else 1);edits.append((insert,f' data-image-id="{fid}"'))
   result=self.html
   for pos,insert in sorted(edits,reverse=True):result=result[:pos]+insert+result[pos:]
   return result,fields
@@ -121,21 +127,28 @@ def import_source():
  return {'version':1,'origin':inventory['origin'],'capturedAt':inventory['captured_at_utc'],'logicalPageCount':len(records),'capturedHtmlCount':len(inventory['pages']),'aliases':aliases,'offsetUnit':'Unicode code points in original UTF-8 decoded source','protectionPolicy':POLICY,'pages':records}
 
 def build():
+ if '--import-source' in sys.argv and '--verify-build' in sys.argv:raise ValueError('source import and read-only build verification are separate operations')
  FIXTURES.mkdir(parents=True,exist_ok=True)
  provenance=import_source() if '--import-source' in sys.argv else json.loads(PROVENANCE.read_text())
+ original_registry=json.loads(IDENTITIES.read_text());registry=original_registry
  pages={};manifest={}
  for slug,record in provenance['pages'].items():
   raw=gzip.decompress((FIXTURES/record['fixture']).read_bytes());source=raw.decode('utf-8')
   if sha(raw)!=record['sourceSha256']:raise ValueError('fixture hash mismatch: '+slug)
-  transformed,patches=ReviewTransform(source).transform();parser=Annotator(transformed);parser.feed(transformed);annotated,fields=parser.annotate()
+  transformed,patches=ReviewTransform(source).transform()
+  identity_api['require_source_template'](slug,sha(transformed),registry,import_source='--import-source' in sys.argv)
+  parser=Annotator(transformed);parser.feed(transformed);annotated,fields=parser.annotate(slug,registry);registry=parser.registry
+  registry['pages'][slug]['sourceTemplateSha256']=sha(transformed)
   raw_parser=Annotator(source);raw_parser.feed(source);_,raw_fields=raw_parser.annotate()
   if [x['value'] for x in raw_fields.values() if x['type']=='text']!=[x['value'] for x in fields.values() if x['type']=='text']:raise ValueError('visible source text changed: '+slug)
   body_start=re.search(r'<body\b[^>]*>',annotated,re.I);body_end=re.search(r'</body\s*>',annotated,re.I)
   if not body_start or not body_end:raise ValueError(slug+' lacks body')
   title=re.search(r'<title>(.*?)</title>',source,re.S|re.I);relative='index.html' if slug=='/' else slug.strip('/')+'/index.html'
   pages[slug]={'title':unescape(title.group(1)) if title else slug,'description':record.get('description',''),'page':relative,'sections':[{'id':'source-body','html':annotated[body_start.end():body_end.start()]}],'fields':fields,'shellPrefix':annotated[:body_start.end()],'shellSuffix':annotated[body_end.start():]}
+  if parser.retired:pages[slug]['retired']=parser.retired
   record.update(reviewSha256=sha(transformed),textFields=sum(f['type']=='text' for f in fields.values()),imageFields=sum(f['type']=='image' for f in fields.values()),patches=patches,sourceTextValuesSha256=sha(json.dumps([x['value'] for x in raw_fields.values() if x['type']=='text'],ensure_ascii=False,separators=(',',':'))),sourceImageValuesSha256=sha(json.dumps([x['value'] for x in raw_fields.values() if x['type']=='image'],ensure_ascii=False,separators=(',',':'))))
   manifest[slug]={'source':relative,'fixture':record['fixture'],'sha256':sha(transformed),'sourceSha256':record['sourceSha256'],'sourceUrl':record['sourceUrl'],'canonical':record['canonical'],'textFields':record['textFields'],'imageFields':record['imageFields'],'scriptBodiesPreservedExceptOwnSiteUrlsAndDisabledReviewIntegrations':True}
+ if registry!=original_registry and '--import-source' not in sys.argv:raise ValueError('field identity drift; review explicit source import mapping before rebuilding')
  payload=(json.dumps(pages,ensure_ascii=False,separators=(',',':'))+'\n').encode('utf-8')
  # Python 3.11/3.12 can inherit zlib's OS byte for mtime=0, while newer
  # versions use 255. Normalize it so macOS/Linux CI share the same header.
@@ -152,5 +165,6 @@ def build():
  PROVENANCE.write_text(json.dumps(provenance,ensure_ascii=False,indent=2)+'\n')
  (FIXTURES/'generated-review-pages.json.gz').write_bytes(packed)
  (FIXTURES/'review-build.json').write_text(json.dumps(build_manifest,ensure_ascii=False,indent=2)+'\n')
+ if '--import-source' in sys.argv:IDENTITIES.write_text(json.dumps(registry,ensure_ascii=False,indent=2)+'\n')
  print(json.dumps({'logicalPages':len(pages),'sourceHtmlCaptures':provenance['capturedHtmlCount'],'aliases':len(provenance['aliases']),'textFields':sum(x['textFields'] for x in manifest.values()),'imageFields':sum(x['imageFields'] for x in manifest.values()),'source':'pinned current gzip fixtures','networkRequests':0,'rawSourcesCopiedToPublic':0}))
 if __name__=='__main__':build()

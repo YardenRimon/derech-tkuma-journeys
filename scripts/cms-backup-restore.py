@@ -29,9 +29,14 @@ def restore(directory,target,migrations):
  # Exclusive file create prevents races/accidental overwrite. SQL supplied by the snapshot is NEVER executed.
  handle=os.open(target,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600);os.close(handle);db=sqlite3.connect(target);db.row_factory=sqlite3.Row
  try:
-  paths=sorted(migrations.glob('*.sql'))
-  if [{'name':p.name,'sha256':sha(p.read_bytes())}for p in paths]!=snapshot['migrations']:raise ValueError('Migration source identity mismatch')
-  for path in paths:db.executescript(path.read_text())
+  paths=sorted(migrations.glob('*.sql'));declared=snapshot.get('migrations')
+  # A receiver may have newer immutable migrations than a still-running CMS.
+  # Restore that archive's exact, nonempty known prefix; never apply later SQL
+  # to its older schema and never execute SQL supplied by the snapshot.
+  if not isinstance(declared,list) or not declared or len(declared)>len(paths):raise ValueError('Migration source identity mismatch')
+  matched=paths[:len(declared)]
+  if [{'name':p.name,'sha256':sha(p.read_bytes())}for p in matched]!=declared:raise ValueError('Migration source identity mismatch')
+  for path in matched:db.executescript(path.read_text())
   actual=[dict(r)for r in db.execute("SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE name LIKE 'cms_%' ORDER BY type,name")]
   if [(x['type'],x['name'],x['tbl_name'],sql_shape(x['sql']))for x in actual]!=[(x['type'],x['name'],x['tbl_name'],sql_shape(x['sql']))for x in snapshot['schema']]:raise ValueError('Repository migrations do not match snapshot schema')
   db.execute('PRAGMA foreign_keys=ON');db.execute('BEGIN')

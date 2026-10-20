@@ -1,5 +1,5 @@
 import { chatGPTSignInPath, getChatGPTUser } from "@/app/chatgpt-auth";
-import { CmsError, emptyDraft, getBasePage, getPageRow, renderDocument, applyPublishedCollections } from "@/lib/cms";
+import { CmsError, emptyDraft, getBasePage, getPageRow, renderDocument, applyPublishedCollections, compatibleStoredDraft } from "@/lib/cms";
 import { authorizeCmsUser } from "@/lib/access";
 
 export const runtime = "edge";
@@ -14,11 +14,11 @@ export async function GET(request: Request) {
     const slug = url.searchParams.get("slug") ?? "/";
     const base = getBasePage(slug);
     const row = await getPageRow(slug);
-    const draft = row ? JSON.parse(row.draft_json) : emptyDraft(base);
+    const draft = row ? compatibleStoredDraft(base,row.draft_json).draft : emptyDraft(base);
     let html = await applyPublishedCollections(await renderDocument(base, draft),slug);
     // The captured link-transition handler can run before editor.js consumes a
     // selection click. Keep that navigation overlay from locking the editor.
-    const script = '<style id="cms-editor-navigation-guard">#global-page-loader{display:none!important}html.global-loader-active,body.global-loader-active{overflow:auto!important}</style><script src="/editor.js" defer></script>';
+    const script = '<style id="cms-editor-navigation-guard">#global-page-loader{display:none!important}html.global-loader-active,body.global-loader-active{overflow:auto!important}</style><script src="/admin/runtime/editor.js" defer></script>';
     html = /<\/body\s*>/i.test(html) ? html.replace(/<\/body\s*>/i, `${script}</body>`) : `${html}${script}`;
     return new Response(html, { headers: {
       "content-type": "text/html; charset=utf-8", "cache-control": "no-store",

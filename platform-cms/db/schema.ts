@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { integer, primaryKey, sqliteTable, text, foreignKey, check } from "drizzle-orm/sqlite-core";
+import { integer, primaryKey, sqliteTable, text, foreignKey, check, index } from "drizzle-orm/sqlite-core";
 
 export const cmsPages = sqliteTable("cms_pages", {
   slug: text("slug").primaryKey(),
@@ -25,10 +25,20 @@ export const cmsSettings = sqliteTable("cms_settings", {
   value: text("value").notNull(),
 });
 
+// Temporary abuse counters contain only hashes, counts and expiry timestamps.
+// Provider identities and all credentials remain in the managed identity pool.
+export const platformAuthRateLimits = sqliteTable("platform_auth_rate_limits", {
+  bucketKey: text("bucket_key").primaryKey(),
+  windowStart: integer("window_start").notNull(),
+  attempts: integer("attempts").notNull(),
+  expiresAt: integer("expires_at").notNull(),
+}, (table) => [index("platform_auth_rate_limits_expiry").on(table.expiresAt)]);
+
 export const cmsUsers = sqliteTable("cms_users", {
   email: text("email").primaryKey(),
   authUserId: text("auth_user_id").unique(),
   cfAccessUserId: text("cf_access_user_id").unique(),
+  platformAuthUserId: text("platform_auth_user_id").unique(),
   role: text("role", { enum: ["system_admin", "content_editor"] }).notNull(),
   active: integer("active", { mode: "boolean" }).notNull().default(true),
   canPublish: integer("can_publish", { mode: "boolean" }).notNull().default(false),

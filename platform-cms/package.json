@@ -9,7 +9,7 @@
     "dev": "node scripts/prepare-pages.mjs && node --import ./scripts/sites-env.mjs ./node_modules/vinext/dist/cli.js dev --port 5174",
     "build": "node scripts/prepare-pages.mjs && node --import ./scripts/sites-env.mjs ./node_modules/vinext/dist/cli.js build",
     "check": "node scripts/prepare-pages.mjs && tsc --noEmit",
-    "test": "node scripts/prepare-pages.mjs && node --experimental-strip-types scripts/test-collections.mjs && node --experimental-strip-types scripts/test-collection-d1.mjs && node --experimental-strip-types scripts/test-review-runtime.mjs && node scripts/test-pages.mjs && node --experimental-strip-types scripts/test-cloudflare-access.mjs && node scripts/test-cloudflare-access-workerd.mjs && node --experimental-strip-types scripts/test-tasks.mjs && node --experimental-strip-types scripts/test-current-collections.mjs && node --experimental-strip-types scripts/test-execution.mjs && node --experimental-strip-types scripts/test-reports.mjs && node scripts/test-cloudflare-release.mjs && node --experimental-strip-types scripts/test-machine-execution.mjs",
+    "test": "node scripts/prepare-pages.mjs && node --experimental-strip-types scripts/test-collections.mjs && node --experimental-strip-types scripts/test-collection-d1.mjs && node --experimental-strip-types scripts/test-review-runtime.mjs && node scripts/test-pages.mjs && node --experimental-strip-types scripts/test-cloudflare-access.mjs && node scripts/test-cloudflare-access-workerd.mjs && node --experimental-strip-types scripts/test-tasks.mjs && node --experimental-strip-types scripts/test-current-collections.mjs && node --experimental-strip-types scripts/test-execution.mjs && node --experimental-strip-types scripts/test-reports.mjs && node scripts/test-cloudflare-release.mjs && node --experimental-strip-types scripts/test-machine-execution.mjs && npm run test:platform-auth && node --experimental-strip-types scripts/test-draft-compatibility.mjs && node scripts/test-cms-compatibility-route.mjs && node scripts/test-cms-compatibility-ui.mjs && node scripts/test-cms-render-workerd.mjs && python3 scripts/test_field_identities.py && node scripts/test-managed-assets.mjs",
     "prepare:pages": "node scripts/prepare-pages.mjs",
     "prepare:pages:verify": "python3 scripts/prepare-pages.py --verify-build",
     "prepare:pages:refresh": "python3 scripts/prepare-pages.py",
@@ -21,12 +21,15 @@
     "test:tasks-http": "node scripts/test-tasks-http.mjs",
     "build:cloudflare": "node scripts/build-cloudflare.mjs",
     "test:machine-http": "node scripts/test-machine-execution-http.mjs",
-    "test:access-workerd": "node scripts/test-cloudflare-access-workerd.mjs"
+    "test:access-workerd": "node scripts/test-cloudflare-access-workerd.mjs",
+    "test:platform-auth": "node scripts/test-platform-auth.mjs && node --experimental-strip-types scripts/test-platform-auth-boundary.mjs && node scripts/test-platform-membership.mjs && node scripts/test-login-ui.mjs && node scripts/test-platform-auth-live.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
     "@hookform/resolvers": "^5.7.1",
     "@shadcn/react": "^0.3.0",
+    "@supabase/ssr": "0.12.7",
+    "@supabase/supabase-js": "2.118.0",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "cmdk": "^1.1.1",

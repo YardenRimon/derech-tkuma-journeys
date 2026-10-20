@@ -37,6 +37,8 @@ export default async function AdminPage() {
         {!canPublish && <span className="admin-permission-note">אפשר לשמור טיוטה; הפרסום נעשה בידי מנהל או עורך עם הרשאת פרסום.</span>}
         <span id="admin-status" role="status" aria-live="polite" />
       </div>
+      <section id="admin-stale" className="admin-card" role="region" aria-label="שינויים ישנים לשחזור" hidden />
+      <div id="admin-toast" hidden />
       <div className="admin-workspace">
         <iframe id="editor-frame" title="עריכת העמוד" src="/admin/edit?slug=/" />
         <aside id="admin-panel" aria-label="כלי עריכה">
@@ -49,6 +51,6 @@ export default async function AdminPage() {
           <div id="panel-content" role="tabpanel" />
         </aside>
       </div>
-      <Script src="/admin.js" strategy="afterInteractive" />
+      <Script src="/admin/runtime/admin.js" strategy="afterInteractive" />
     </AdminShell>;
 }

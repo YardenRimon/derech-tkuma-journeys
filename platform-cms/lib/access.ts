@@ -1,7 +1,8 @@
 import { env } from "cloudflare:workers";
 import { getChatGPTUser, getAuthProvider, type ChatGPTUser } from "@/app/chatgpt-auth";
 
-export function authIdColumn(): "auth_user_id" | "cf_access_user_id" {
+export function authIdColumn(): "auth_user_id" | "cf_access_user_id" | "platform_auth_user_id" {
+  if (getAuthProvider() === "supabase") return "platform_auth_user_id";
   return getAuthProvider() === "cloudflare-access" ? "cf_access_user_id" : "auth_user_id";
 }
 

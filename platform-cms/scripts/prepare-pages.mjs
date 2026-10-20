@@ -18,9 +18,15 @@ assert.equal(sha(packed),build.packedSha256,'pinned review gzip identity mismatc
 const payload=gunzipSync(packed,{maxOutputLength:40*1024*1024});
 assert.equal(payload.length,build.payloadBytes);assert.equal(sha(payload),build.payloadSha256,'pinned review payload hash mismatch');
 const pages=JSON.parse(payload.toString('utf8')),routes=Object.keys(pages).sort();
+const identities=json('source-pages/field-identities.json');assert.equal(identities.format,1);
 assert.equal(routes.length,build.routeCount);assert.equal(routes.length,provenance.logicalPageCount);
 for(const object of [build.sources,provenance.pages,manifest])assert.deepEqual(routes,Object.keys(object).sort(),'pinned route identity mismatch');
 for(const slug of routes){
+ const identityPage=identities.pages[slug];assert.ok(identityPage,'field identity page missing');
+ assert.equal(identityPage.sourceTemplateSha256,manifest[slug].sha256,'template changed without reviewed identity migration');
+ assert.deepEqual(identityPage.active.map(({id,...field})=>[id,field]),Object.entries(pages[slug].fields),'stable field registry does not match generated fields');
+ const allIds=[...identityPage.active,...identityPage.retired].map(x=>x.id);assert.equal(new Set(allIds).size,allIds.length,'retired field identity reused');
+ assert.deepEqual(Object.fromEntries(identityPage.retired.map(x=>[x.id,x.value])),pages[slug].retired??{},'retired recovery originals missing');
  const identity=build.sources[slug],source=provenance.pages[slug],entry=manifest[slug];
  assert.match(identity.fixture,/^current-[a-f0-9]{20}\.html\.gz$/);
  assert.equal(identity.fixture,source.fixture);assert.equal(identity.fixture,entry.fixture);

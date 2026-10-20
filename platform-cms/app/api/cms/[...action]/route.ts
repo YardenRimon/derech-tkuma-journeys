@@ -1,7 +1,7 @@
 import {
   CmsError, asRevision, emptyDraft, getBasePage, getBucket,
   getD1, getPageRow, jsonError, listPages, normalizeSlug, renderDocument,
-  requireSameOrigin, validateDraft, editablePageDraft, type Draft,
+  requireSameOrigin, validateDraft, compatibleStoredDraft,
 } from "@/lib/cms";
 import { authorizeCmsUser } from "@/lib/access";
 import { managedCollectionFields } from "@/lib/collection-projection";
@@ -37,8 +37,9 @@ export async function GET(request: Request) {
     const base = getBasePage(slug);
     const row = await getPageRow(slug);
     if (route === "page") {
+      const fitted = row ? compatibleStoredDraft(base,row.draft_json) : {draft:emptyDraft(base),stale:[]};
       return noStore({ slug, title: base.title, pages: listPages(), base, managedFields:managedCollectionFields(slug),
-        draft: row ? editablePageDraft(base,JSON.parse(row.draft_json)) : emptyDraft(base),
+        draft: fitted.draft, stale: fitted.stale,
         revision: row?.revision ?? 0, publishedVersion: row?.published_version ?? 0,
         updatedAt: row?.updated_at ?? null,
         permissions: { role: user.role, canPublish: user.canPublish } });
@@ -70,6 +71,14 @@ export async function POST(request: Request) {
     const now = new Date().toISOString();
 
     if (route === "save") {
+      const supplied = body.draft as {fields?:Record<string,unknown>;order?:unknown[]} | undefined;
+      if (supplied && typeof supplied === "object" && (
+        (supplied.fields && typeof supplied.fields === "object" && Object.keys(supplied.fields).some(id=>!Object.hasOwn(base.fields,id))) ||
+        (Array.isArray(supplied.order) && supplied.order.some(id=>typeof id === "string" && !base.sections.some(section=>section.id===id)))
+      )) throw new CmsError(409,"תבנית העמוד השתנתה. העתק את השינויים המקומיים וטען את העורך מחדש לפני שמירה.");
+      if (current && compatibleStoredDraft(base,current.draft_json).stale.length && body.discardStale !== true) {
+        throw new CmsError(409,"יש להעתיק את השינויים הישנים ולאשר במפורש את הסרתם לפני השמירה.");
+      }
       const draft = await validateDraft(base, body.draft);
       const serialized = JSON.stringify(draft);
       if (current) {
@@ -86,28 +95,32 @@ export async function POST(request: Request) {
 
     if (!current) throw new CmsError(400, "שמור את הטיוטה לפני הפרסום");
     if (route === "publish") {
-      const draft = await validateDraft(base, JSON.parse(current.draft_json)) as Draft;
+      const fitted = compatibleStoredDraft(base,current.draft_json);
+      if (fitted.stale.length) throw new CmsError(409,"יש שינויים ישנים שלא מתאימים לעמוד. טען את העורך, העתק את התוכן הדרוש ואשר את הסרתם לפני הפרסום.");
+      const draft = await validateDraft(base, fitted.draft);
+      const serialized = JSON.stringify(draft);
       const html = await renderDocument(base, draft);
       const results = await db.batch([
-        db.prepare("INSERT INTO cms_versions (slug, version, html, draft_json, published_by, published_at) SELECT slug, published_version + 1, ?, draft_json, ?, ? FROM cms_pages WHERE slug = ? AND revision = ?")
-          .bind(html, user.userId, now, slug, revision),
-        db.prepare("UPDATE cms_pages SET published_html = ?, published_version = published_version + 1, revision = revision + 1, updated_by = ?, updated_at = ? WHERE slug = ? AND revision = ?")
-          .bind(html, user.userId, now, slug, revision),
+        db.prepare("INSERT INTO cms_versions (slug, version, html, draft_json, published_by, published_at) SELECT slug, published_version + 1, ?, ?, ?, ? FROM cms_pages WHERE slug = ? AND revision = ?")
+          .bind(html, serialized, user.userId, now, slug, revision),
+        db.prepare("UPDATE cms_pages SET draft_json = ?, published_html = ?, published_version = published_version + 1, revision = revision + 1, updated_by = ?, updated_at = ? WHERE slug = ? AND revision = ?")
+          .bind(serialized, html, user.userId, now, slug, revision),
       ]);
       if (results[1].meta.changes !== 1) conflict();
       return noStore({ slug, revision: revision + 1, publishedVersion: current.published_version + 1 });
     }
     if (route === "rollback") {
       const version = asRevision(body.version);
-      if (version < 1) throw new CmsError(400, "מספר פרסום אינו תקין");
-      const prior = await db.prepare("SELECT html, draft_json FROM cms_versions WHERE slug = ? AND version = ?").bind(slug, version).first<{ html: string; draft_json: string }>();
+      const prior = version === 0 ? { draft_json:JSON.stringify(emptyDraft(base)) } : await db.prepare("SELECT draft_json FROM cms_versions WHERE slug = ? AND version = ?").bind(slug, version).first<{ draft_json: string }>();
       if (!prior) throw new CmsError(404, "הגרסה לא נמצאה");
-      await validateDraft(base, JSON.parse(prior.draft_json));
+      const fitted = compatibleStoredDraft(base,prior.draft_json);
+      const restored = await validateDraft(base,fitted.draft);
+      const html = await renderDocument(base,restored);
       const results = await db.batch([
         db.prepare("INSERT INTO cms_versions (slug, version, html, draft_json, published_by, published_at) SELECT slug, published_version + 1, ?, ?, ?, ? FROM cms_pages WHERE slug = ? AND revision = ?")
-          .bind(prior.html, prior.draft_json, user.userId, now, slug, revision),
+          .bind(html, JSON.stringify(restored), user.userId, now, slug, revision),
         db.prepare("UPDATE cms_pages SET draft_json = ?, published_html = ?, published_version = published_version + 1, revision = revision + 1, updated_by = ?, updated_at = ? WHERE slug = ? AND revision = ?")
-          .bind(prior.draft_json, prior.html, user.userId, now, slug, revision),
+          .bind(prior.draft_json, html, user.userId, now, slug, revision),
       ]);
       if (results[1].meta.changes !== 1) conflict();
       return noStore({ slug, revision: revision + 1, publishedVersion: current.published_version + 1 });

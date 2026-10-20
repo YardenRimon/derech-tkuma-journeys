@@ -8,10 +8,11 @@ import{createHash}from'node:crypto';
 const root=fileURLToPath(new URL('../',import.meta.url));
 // Bundle the actual wrapper; only Vinext and diagnostic collaborators are stubbed.
 // The stub reproduces the publicFiles-only behavior: a build chunk would be 404.
-const bundled=await build({entryPoints:[path.join(root,'build/cloudflare-worker.ts')],bundle:true,write:false,format:'esm',platform:'browser',target:'es2022',logLevel:'silent',plugins:[{name:'offline-collaborators',setup(b){
+const bundled=await build({entryPoints:[path.join(root,'build/cloudflare-worker.ts')],bundle:true,write:false,format:'esm',platform:'browser',target:'es2022',define:{__PLATFORM_AUTH_PROVIDER__:JSON.stringify('cloudflare-access')},external:['cloudflare:workers'],logLevel:'silent',plugins:[{name:'offline-collaborators',setup(b){
  b.onResolve({filter:/^vinext\/server\/fetch-handler$/},()=>({path:'handler',namespace:'fixture'}));
  b.onResolve({filter:/lib\/cloudflare-access$/},()=>({path:'diagnostics',namespace:'fixture'}));
- b.onLoad({filter:/.*/,namespace:'fixture'},({path:name})=>({contents:name==='handler'?`export default{fetch(request){globalThis.__derechAssetFixture.handler.push(request);return new Response('vinext route',{status:new URL(request.url).pathname.startsWith('/_next/')?404:200});}}`:`export const accessDiagnosticsEnabled=()=>false,accessDiagnosticPath=()=>false,ACCESS_DIAGNOSTIC_SCOPE_HEADER='x-fixture-diagnostic',reportAccessHeaderPresence=()=>{};`,loader:'js'}));
+ b.onResolve({filter:/lib\/platform-auth$/},()=>({path:'auth',namespace:'fixture'}));
+ b.onLoad({filter:/.*/,namespace:'fixture'},({path:name})=>({contents:name==='auth'?`export const readPlatformAuthIdentity=async()=>{throw new Error('Shared identity must not run in the Access build')};export const appendPlatformAuthCookies=response=>response;`:name==='handler'?`export default{fetch(request){globalThis.__derechAssetFixture.handler.push(request);return new Response('vinext route',{status:new URL(request.url).pathname.startsWith('/_next/')?404:200});}}`:`export const accessDiagnosticsEnabled=()=>false,accessDiagnosticPath=()=>false,ACCESS_DIAGNOSTIC_SCOPE_HEADER='x-fixture-diagnostic',reportAccessHeaderPresence=()=>{};`,loader:'js'}));
 }}]});
 const{default:worker}=await import('data:text/javascript;base64,'+Buffer.from(bundled.outputFiles[0].text).toString('base64'));
 const sha='d'.repeat(40),origin='https://fixture.workers.dev';

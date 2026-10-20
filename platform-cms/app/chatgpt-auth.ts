@@ -4,7 +4,7 @@ import { env } from "cloudflare:workers";
 import { verifyAccessIdentity, accessDiagnosticsEnabled, ACCESS_DIAGNOSTIC_SCOPE_HEADER, reportAccessFailure, reportAccessHeaderPresence, reportAccessJwksProbe } from "@/lib/cloudflare-access";
 
 // Fixed at build time: a standalone Worker can never opt into Sites headers.
-declare const __PLATFORM_AUTH_PROVIDER__: "sites" | "cloudflare-access";
+declare const __PLATFORM_AUTH_PROVIDER__: "sites" | "cloudflare-access" | "supabase";
 export function getAuthProvider() { return __PLATFORM_AUTH_PROVIDER__; }
 
 export type ChatGPTUser = {
@@ -26,6 +26,15 @@ const CALLBACK_PATH = "/callback";
 
 export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
   const requestHeaders = await headers();
+  if (getAuthProvider() === "supabase") {
+    // The standalone Worker removes these headers from EVERY external request
+    // and creates them only after trusted-provider verification and MFA.
+    const userId = requestHeaders.get("x-platform-authenticated-id");
+    const email = requestHeaders.get("x-platform-authenticated-email");
+    if (!userId || !email || requestHeaders.get("x-platform-authenticated-aal") !== "aal2") return null;
+    const fullName = safeDecodeURIComponent(requestHeaders.get("x-platform-authenticated-name") ?? "") || null;
+    return { userId, email, displayName: fullName ?? email, fullName };
+  }
   if (getAuthProvider() === "cloudflare-access") {
     const settings = env as unknown as { CF_ACCESS_ISSUER?: string; CF_ACCESS_AUDIENCE?: string; PLATFORM_RELEASE_STAGE?: string; CF_ACCESS_DIAGNOSTICS?: string };
     const diagnose = accessDiagnosticsEnabled(settings) && requestHeaders.get(ACCESS_DIAGNOSTIC_SCOPE_HEADER) === "1";
@@ -64,11 +73,13 @@ export async function requireChatGPTUser(
 
 export function chatGPTSignInPath(returnTo: string): string {
   const safeReturnTo = safeRelativeReturnPath(returnTo);
+  if (getAuthProvider() === "supabase") return `/login/?next=${encodeURIComponent(safeReturnTo)}`;
   if (getAuthProvider() === "cloudflare-access") return `/auth-required?return_to=${encodeURIComponent(safeReturnTo)}`;
   return `${SIGN_IN_PATH}?return_to=${encodeURIComponent(safeReturnTo)}`;
 }
 
 export function chatGPTSignOutPath(returnTo = "/"): string {
+  if (getAuthProvider() === "supabase") return "/login/?logout=1";
   if (getAuthProvider() === "cloudflare-access") return "/cdn-cgi/access/logout";
   const safeReturnTo = safeRelativeReturnPath(returnTo);
   return `${SIGN_OUT_PATH}?return_to=${encodeURIComponent(safeReturnTo)}`;

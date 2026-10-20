@@ -6,6 +6,7 @@ import { D1Collections } from "@/lib/collection-d1";
 import { siteScope } from "@/lib/site-scope";
 import visualResources from "@/lib/visual-resource-map.json";
 import { prepareReviewRuntime } from "@/lib/review-runtime";
+import { fitStoredDraft, parseStoredDraft } from "@/lib/draft-compatibility";
 
 export { CmsError } from "@/lib/access";
 
@@ -17,6 +18,7 @@ export type BasePage = {
   page: string;
   sections: { id: string; html: string }[];
   fields: Record<string, Field>;
+  retired?: Record<string, string>;
   shellPrefix: string;
   shellSuffix: string;
 };
@@ -70,6 +72,11 @@ export function emptyDraft(base: BasePage): Draft {
 export function editablePageDraft(base:BasePage,draft:Draft):Draft{
  const managed=managedCollectionFields(base.slug??'/');
  return {...draft,fields:Object.fromEntries(Object.entries(draft.fields).filter(([id])=>!managed[id]))};
+}
+
+export function compatibleStoredDraft(base: BasePage, serialized: string) {
+  try { return fitStoredDraft(base, editablePageDraft(base, parseStoredDraft(serialized))); }
+  catch { throw new CmsError(409, "הטיוטה השמורה אינה תקינה. אין לשמור או לפרסם לפני שחזור מגיבוי או מגרסה תקינה."); }
 }
 
 function bindingEnv() {
@@ -149,7 +156,7 @@ export async function validateDraft(base: BasePage, input: unknown): Promise<Dra
 export async function renderDocument(base: BasePage, draft: Draft): Promise<string> {
   // Historical page versions may predate typed collection ownership. Preserve
   // their audit JSON but never let those old field overrides compete publicly.
-  draft=editablePageDraft(base,draft);
+  draft=fitStoredDraft(base,editablePageDraft(base,draft)).draft;
   const sections = new Map(base.sections.map((section) => [section.id, section.html]));
   const html = base.shellPrefix + draft.order.map((id) => {
     const section = sections.get(id);
@@ -214,7 +221,12 @@ export async function getPublishedPage(slug: string): Promise<string> {
     "SELECT draft_json FROM cms_versions WHERE slug = ? AND version = ?",
   ).bind(normalized, row.published_version).first<{ draft_json: string }>();
   if (!published) return applyPublishedCollections(row.published_html,normalized);
-  return applyPublishedCollections(await renderDocument(base, JSON.parse(published.draft_json) as Draft),normalized);
+  try {
+    return applyPublishedCollections(await renderDocument(base, compatibleStoredDraft(base,published.draft_json).draft),normalized);
+  } catch {
+    // A damaged archive must not turn the public page into an empty template.
+    return applyPublishedCollections(row.published_html,normalized);
+  }
 }
 
 export async function applyPublishedCollections(html:string,slug:string):Promise<string>{
