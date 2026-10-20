@@ -15,7 +15,7 @@ const compiled = join(temporary, 'contract.mjs');
 writeFileSync(compiled, bundle.outputFiles[0].text);
 const auth = await import(pathToFileURL(compiled).href);
 const { AUTH_COOKIE, CSRF_COOKIE, FLOW_COOKIE, PlatformAuthError, PlatformCookieJar, platformAuthConfig, verifiedPlatformIdentity, handlePlatformAuth, readVerifiedPlatformIdentity, platformAuthRateLimiter, createManagedPlatformProvider } = auth;
-const config = { url: auth.PLATFORM_AUTH_PROJECT_URL, publishableKey: 'sb_publishable_synthetic_fixture_only', origin: 'https://admin.example.invalid', emailOtpReady: true };
+const config = { url: auth.PLATFORM_AUTH_PROJECT_URL, publishableKey: 'sb_publishable_synthetic_fixture_only', origin: 'https://admin.example.invalid', emailOtpReady: true, requireMfa: true };
 const now = Date.now(), subject = '3153386f-40e0-4949-aab5-ce4e4858d644', factorId = 'bba3b819-ab9d-4b26-9036-b1ad999d2b34', challengeId = '4da3cf8d-4918-4aca-902a-12f65e1bb77f';
 const csrf = 'c'.repeat(64);
 const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url');
@@ -39,8 +39,8 @@ function fixture(overrides = {}) {
     async exchangeCodeForSession(code) { state.events.push(['exchange', code]); if (state.codeUsed) return { error: new Error('single use') }; state.codeUsed = true; state.authenticated = true; jar.set(AUTH_COOKIE, 'oauth-server-transport'); return { error: null }; },
     async signOut(input) { state.events.push(['signOut', input]); state.authenticated = false; return { error: null }; },
     mfa: {
-      async listFactors() { return { data: { all: state.factors ?? [{ id: factorId, factor_type: 'totp', status: 'verified', friendly_name: 'Platform CMS' }] }, error: null }; },
-      async enroll(input) { state.events.push(['enroll', input]); state.factors = [{ id: factorId, factor_type: 'totp', status: 'unverified', friendly_name: 'Platform CMS' }]; return { data: { id: factorId, totp: { qr_code: 'data:image/svg+xml;utf-8,%3Csvg%2F%3E', secret: 'SYNTHETICSECRET', uri: 'otpauth://totp/fixture?secret=SYNTHETICSECRET' } }, error: null }; },
+      async listFactors() { state.events.push(['factors']);return { data: { all: state.factors ?? [{ id: factorId, factor_type: 'totp', status: 'verified', friendly_name: 'Platform CMS' }] }, error: state.brokenMfa ? new Error('MFA provider unavailable') : null }; },
+      async enroll(input) { state.events.push(['enroll', input]); state.factors = [{ id: factorId, factor_type: 'totp', status: 'unverified', friendly_name: 'Platform CMS' }]; return { data: { id: factorId, totp: { qr_code: state.qrCode ?? 'data:image/svg+xml;utf-8,%3Csvg%2F%3E', secret: 'SYNTHETICSECRET', uri: 'otpauth://totp/fixture?secret=SYNTHETICSECRET' } }, error: null }; },
       async unenroll(input) { state.events.push(['unenroll', input]); return { error: null }; },
       async challenge(input) { state.events.push(['challenge', input]); return { data: { id: challengeId }, error: null }; },
       async verify(input) { state.events.push(['verify', input]); if (state.badMfa || state.mfaUsed) return { error: new Error('expired or reused') }; state.mfaUsed = true; state.aal = 'aal2'; jar.set(AUTH_COOKIE, 'mfa-upgraded-transport'); return { error: null }; },
@@ -65,6 +65,10 @@ try {
   const validBindings = { PLATFORM_AUTH_SUPABASE_URL: config.url, PLATFORM_AUTH_SUPABASE_PUBLISHABLE_KEY: config.publishableKey, PLATFORM_AUTH_ORIGIN: config.origin };
   assert.deepEqual(platformAuthConfig({ ...validBindings, PLATFORM_AUTH_EMAIL_OTP_READY: 'true' }), config);
   for(const readiness of [undefined, false, true, 'false', 'TRUE', '']) assert.equal(platformAuthConfig({ ...validBindings, PLATFORM_AUTH_EMAIL_OTP_READY: readiness }).emailOtpReady, false, 'email OTP remains unavailable without exact explicit deployment readiness');
+  assert.equal(platformAuthConfig(validBindings).requireMfa, true, 'MFA is required by default');
+  assert.equal(platformAuthConfig({ ...validBindings, PLATFORM_AUTH_REQUIRE_MFA: 'true' }).requireMfa, true);
+  assert.equal(platformAuthConfig({ ...validBindings, PLATFORM_AUTH_REQUIRE_MFA: 'false' }).requireMfa, false, 'only explicit false opts out of pilot MFA');
+  for(const value of [false, true, null, '', 'FALSE', 'True', '0', 0]) assert.throws(() => platformAuthConfig({ ...validBindings, PLATFORM_AUTH_REQUIRE_MFA: value }), errorIs(503, 'auth_unavailable'), 'invalid policy values fail closed');
   for (const invalid of [
     { PLATFORM_AUTH_SUPABASE_URL: 'https://abcdefghijklmnopqrst.supabase.co' },
     { PLATFORM_AUTH_SUPABASE_PUBLISHABLE_KEY: 'eyJhbGciOiJIUzI1NiJ9.service_role' },
@@ -105,6 +109,7 @@ try {
   const session = await response.json();
   assert.equal(session.authenticated, false); assert.match(session.csrfToken, /^[a-f0-9]{64}$/);
   assert.deepEqual(session.methods, { google: true, password: true, emailOtp: true });
+  assert.deepEqual(session.policy, { requireMfa: true });
   assert.equal(response.headers.get('cache-control'), 'private, no-store, max-age=0');
   for (const value of response.headers.getSetCookie()) { assert.match(value, /; Path=\/; Max-Age=\d+; Secure; HttpOnly; SameSite=Lax$/); assert.ok(!value.includes('Domain=')); }
   for (const headers of [{ origin: 'https://attacker.invalid' }, { origin: '' }, { 'x-platform-auth-csrf': '' }, { 'x-platform-auth-csrf': 'd'.repeat(64) }, { 'sec-fetch-site': 'cross-site' }]) {
@@ -118,6 +123,7 @@ try {
 
   const password = fixture(); response = await run(post('password', { email: ' Allowed@Example.invalid ', password: 'secret', returnTo: '/admin/content/' }), password);
   const signedIn = await response.json(); assert.equal(response.status, 200); assert.equal(signedIn.identity.aal, 'aal1'); assert.equal(signedIn.mfaRequired, true); assert.equal(signedIn.returnTo, '/admin/content/'); assert.ok(!JSON.stringify(signedIn).includes('access_token'));
+  assert.deepEqual(signedIn.policy, { requireMfa: true });
   response = await run(post('password', { email: user.email, password: 'secret' }), fixture({ badPassword: true })); assert.equal(response.status, 401); assert.ok(!JSON.stringify(await response.json()).includes('redact provider detail'));
   const otp = fixture({ unknownAccount: true }); response = await run(post('otp/send', { email: user.email, returnTo: '/admin/' }), otp); assert.equal(response.status, 202); assert.deepEqual(await response.json(), { sent: true }); assert.deepEqual(otp.state.events[0][1], { email: user.email, options: { shouldCreateUser: false } });
   const unavailableOtp = fixture(), disabledConfig = { ...config, emailOtpReady: false };let unavailableProviderCalls = 0, unavailableRateCalls = 0;
@@ -151,6 +157,10 @@ try {
 
   const mfa = fixture({ authenticated: true, factors: [] });
   response = await run(post('mfa/enroll', {}), mfa); assert.equal(response.status, 200); const enrollment = await response.json(); assert.equal(enrollment.factorId, factorId); assert.match(enrollment.qrCode, /^data:image\/svg\+xml/);
+  assert.equal(Buffer.from(enrollment.qrCode.split(',')[1], 'base64').toString('utf8'), '<svg/>');
+  for(const qrCode of ['https://outside.invalid/qr.svg', 'data:text/html,<svg/>', 'data:image/svg+xml,<html/>', 'data:image/svg+xml,%zz', 'data:image/svg+xml,' + 'x'.repeat(60001)]) {
+    response = await run(post('mfa/enroll', {}), fixture({ authenticated: true, factors: [], qrCode }));assert.equal(response.status, 503, 'invalid/unbounded QR input stays rejected');
+  }
   response = await run(post('mfa/challenge', { factorId: subject }), mfa); assert.equal(response.status, 400, 'foreign factor cannot be challenged');
   response = await run(post('mfa/challenge', { factorId }), mfa); assert.equal(response.status, 200); assert.equal((await response.json()).challengeId, challengeId);
   response = await run(post('mfa/verify', { factorId, challengeId, code: '123456', returnTo: '/admin/' }), mfa); assert.equal(response.status, 200); assert.equal((await response.json()).identity.aal, 'aal2');
@@ -159,6 +169,26 @@ try {
   const setting = fixture({ authenticated: true, aal: 'aal2' }); response = await run(post('password/set', { password: 'long password owned by user' }), setting); assert.equal(response.status, 200); assert.deepEqual(await response.json(), { passwordUpdated: true }); assert.ok(setting.state.events.some(event => event[0] === 'updateUser'));
   response = await run(post('password/set', { password: 'short' }), setting); assert.equal(response.status, 400);
   response = await run(post('logout', {}, { cookie: `${CSRF_COOKIE}=${csrf}; ${AUTH_COOKIE}=a; ${AUTH_COOKIE}.0=b` }), setting); assert.equal(response.status, 200); assert.equal(response.headers.getSetCookie().filter(value => /Max-Age=0/.test(value)).length, 2); assert.deepEqual(setting.state.events.find(event => event[0] === 'signOut')[1], { scope: 'local' });
+
+  // The pilot opt-out changes assurance policy only. Identity is still verified
+  // remotely and session/factor failures cannot be bypassed with browser data.
+  const optionalConfig = { ...config, requireMfa: false };
+  const runOptional = (request, f) => handlePlatformAuth(request, { config: optionalConfig, providerFactory: f.factory, limiter: async () => {}, now: () => now });
+  const optionalAnonymous = fixture();response = await runOptional(new Request(config.origin + '/api/auth/session/', { headers: { 'x-platform-authenticated-id': subject, 'x-platform-authenticated-email': user.email, 'x-platform-authenticated-aal': 'aal2' } }), optionalAnonymous);
+  const anonymousPolicy = await response.json();assert.equal(anonymousPolicy.authenticated, false);assert.equal(anonymousPolicy.identity, undefined);assert.deepEqual(anonymousPolicy.policy, { requireMfa: false });
+  const optional = fixture({ authenticated: true, brokenMfa: true });response = await runOptional(new Request(config.origin + '/api/auth/session/'), optional);
+  const optionalSession = await response.json();assert.equal(response.status, 200);assert.equal(optionalSession.identity.aal, 'aal1');assert.equal(optionalSession.mfaRequired, false);assert.deepEqual(optionalSession.policy, { requireMfa: false });assert.ok(!Object.hasOwn(optionalSession, 'factors'), 'optional sessions omit factors without claiming enrolled factors were removed');assert.equal(optional.state.events.filter(event => event[0] === 'factors').length, 0);
+  response = await run(new Request(config.origin + '/api/auth/session/'), fixture({ authenticated: true, brokenMfa: true }));assert.equal(response.status, 503, 'required policy still surfaces an unavailable MFA provider');
+  const optionalLogin = fixture({ brokenMfa: true });response = await runOptional(post('password', { email: user.email, password: 'secret' }), optionalLogin);const optionalSignedIn = await response.json();assert.equal(response.status, 200);assert.equal(optionalSignedIn.identity.aal, 'aal1');assert.equal(optionalSignedIn.mfaRequired, false);assert.deepEqual(optionalSignedIn.policy, { requireMfa: false });
+  const optionalGoogle = fixture({ brokenMfa: true });response = await runOptional(callbackRequest(), optionalGoogle);assert.equal(response.status, 303);assert.equal(response.headers.get('location'), '/admin/content/');
+  response = await runOptional(post('password/set', { password: 'long password owned by user' }), optional);assert.equal(response.status, 200);assert.deepEqual(await response.json(), { passwordUpdated: true });
+  response = await runOptional(post('password/set', { password: 'short' }), optional);assert.equal(response.status, 400);
+  response = await runOptional(post('password/set', { password: 'long password owned by user' }, { 'x-platform-auth-csrf': '' }), optional);assert.equal(response.status, 403, 'optional MFA never weakens CSRF');
+  const optionalVerified = await readVerifiedPlatformIdentity(new Request(config.origin + '/admin/'), optionalConfig, optional.factory);assert.equal(optionalVerified.identity.aal, 'aal1');
+  await assert.rejects(() => readVerifiedPlatformIdentity(new Request(config.origin + '/admin/'), optionalConfig, optional.factory, { requireAal2: true }), errorIs(403, 'mfa_required'), 'an explicit stronger boundary remains effective');
+  for(const invalid of [{ authenticated: false }, { authenticated: true, forged: true }, { authenticated: true, user: { ...user, email_confirmed_at: undefined } }, { authenticated: true, jwt: token({ aal: 'aal1', iss: 'https://outside.invalid/auth/v1' }) }, { authenticated: true, jwt: token({ aal: 'aal1', email: 'outsider@example.invalid' }) }, { authenticated: true, jwt: token({ aal: 'aal1', exp: now / 1000 - 5 }) }]) {
+    const rejected = fixture(invalid);response = await runOptional(post('password/set', { password: 'long password owned by user' }), rejected);assert.equal(response.status, 401);assert.equal(rejected.state.events.filter(event => event[0] === 'updateUser').length, 0, 'policy opt-out cannot authorize missing/forged/unverified/foreign/expired identity');
+  }
 
   // Real INSERT ... ON CONFLICT ... RETURNING on SQLite, called concurrently:
   // neither IP nor account limits depend on an unsafe read-then-write counter.
@@ -193,6 +223,7 @@ try {
   // The actual installed SSR provider is exercised with in-process fetch only.
   // It sends only to the fixed managed authority and never trusts cookie.user.
   const originalFetch = globalThis.fetch; const requests = [];
+  const rawSdkSvg = '<svg xmlns="http://www.w3.org/2000/svg"><path fill="#000" d="M0 0h1v1z"/></svg>';
   try {
     globalThis.fetch = async (input, init) => {
       requests.push({ url: String(input), init }); assert.equal(new URL(input).origin, config.url); assert.equal(init.redirect, 'manual'); assert.ok(init.signal);
@@ -200,6 +231,7 @@ try {
         assert.equal(new Headers(init.headers).get('authorization'), 'Bearer ' + token());
         return Response.json(user);
       }
+      if(new URL(input).pathname === '/auth/v1/factors') return Response.json({ id: factorId, type: 'totp', totp: { qr_code: rawSdkSvg, secret: 'SYNTHETICSECRET', uri: 'otpauth://totp/fixture?secret=SYNTHETICSECRET' } });
       throw new Error('unexpected local transport request');
     };
     const transport = new PlatformCookieJar(null); transport.set(AUTH_COOKIE, JSON.stringify({ access_token: token(), refresh_token: 'synthetic-refresh', expires_at: Math.floor(now / 1000) + 600, expires_in: 600, token_type: 'bearer', user: { ...user, email: 'forged@cookie.invalid' } }));
@@ -208,6 +240,8 @@ try {
     const oauthJar = new PlatformCookieJar(null), actualGoogle = await createManagedPlatformProvider(config, oauthJar).signInWithOAuth({ provider: 'google', options: { redirectTo: config.origin + '/auth/callback/?state=' + csrf, skipBrowserRedirect: true } });
     assert.equal(actualGoogle.error, null); assert.equal(new URL(actualGoogle.data.url).searchParams.get('code_challenge_method'), 's256'); assert.ok(oauthJar.hasVerifier());
     assert.ok(oauthJar.pending().every(value => value.includes('HttpOnly') && value.includes('Secure') && !value.includes('Domain=')));
+    const installedEnrollment = await createManagedPlatformProvider(config, transport).mfa.enroll({ factorType: 'totp', friendlyName: 'Platform CMS', issuer: 'Yarden Platform' });assert.equal(installedEnrollment.error, null);assert.equal(installedEnrollment.data.totp.qr_code, 'data:image/svg+xml;utf-8,' + rawSdkSvg, 'installed SDK returns an unencoded utf-8 data URI');
+    const sdkQr = auth.authQrCode(installedEnrollment.data.totp.qr_code);assert.match(sdkQr, /^data:image\/svg\+xml;base64,/);assert.equal(new URL(sdkQr).hash, '', 'SVG color hashes never become URL fragments');assert.equal(Buffer.from(sdkQr.split(',')[1], 'base64').toString('utf8'), rawSdkSvg);assert.ok(sdkQr.length <= 60000);
   } finally { globalThis.fetch = originalFetch; }
-  console.log('PASS shared managed auth: verified identity/claims/AAL2, CSRF/cookies, password+8-digit OTP+Google PKCE+single-use callback, owned MFA/password settings, atomic hashed D1 rate limits, request-isolated installed SSR adapter; entirely offline.');
+  console.log('PASS shared managed auth: verified identity/claims, required-by-default MFA and explicit optional policy, safe installed-SDK QR normalization, CSRF/cookies, password+8-digit OTP+Google PKCE+single-use callback, owned MFA/password settings, atomic hashed D1 rate limits, request-isolated installed SSR adapter; entirely offline.');
 } finally { rmSync(temporary, { recursive: true, force: true }); }

@@ -5,6 +5,7 @@ import { verifyAccessIdentity, accessDiagnosticsEnabled, ACCESS_DIAGNOSTIC_SCOPE
 
 // Fixed at build time: a standalone Worker can never opt into Sites headers.
 declare const __PLATFORM_AUTH_PROVIDER__: "sites" | "cloudflare-access" | "supabase";
+declare const __PLATFORM_AUTH_REQUIRE_MFA__: boolean;
 export function getAuthProvider() { return __PLATFORM_AUTH_PROVIDER__; }
 
 export type ChatGPTUser = {
@@ -28,10 +29,11 @@ export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
   const requestHeaders = await headers();
   if (getAuthProvider() === "supabase") {
     // The standalone Worker removes these headers from EVERY external request
-    // and creates them only after trusted-provider verification and MFA.
+    // and creates them only after trusted-provider verification and the fixed MFA policy.
     const userId = requestHeaders.get("x-platform-authenticated-id");
     const email = requestHeaders.get("x-platform-authenticated-email");
-    if (!userId || !email || requestHeaders.get("x-platform-authenticated-aal") !== "aal2") return null;
+    const aal = requestHeaders.get("x-platform-authenticated-aal");
+    if (!userId || !email || (aal !== "aal1" && aal !== "aal2") || (__PLATFORM_AUTH_REQUIRE_MFA__ && aal !== "aal2")) return null;
     const fullName = safeDecodeURIComponent(requestHeaders.get("x-platform-authenticated-name") ?? "") || null;
     return { userId, email, displayName: fullName ?? email, fullName };
   }

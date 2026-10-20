@@ -7,7 +7,7 @@ export function loginClientSource(returnTo) {
   const passwordSettings = new URLSearchParams(location.search).get('settings') === 'password';
   const logoutRequested = new URLSearchParams(location.search).get('logout') === '1';
   const byId = id => document.getElementById(id);
-  let csrfToken = '', ready = false, busy = false, method = 'password', otpEmail = '', factorId = '', factors = [], resendUntil = 0, focusAfterBusy = '', logoutConfirmed = false, emailOtpAvailable = true;
+  let csrfToken = '', ready = false, busy = false, method = 'password', otpEmail = '', factorId = '', factors = [], resendUntil = 0, focusAfterBusy = '', logoutConfirmed = false, emailOtpAvailable = true, requireMfa = true;
   const messages = {
     auth_unavailable:'שירות ההתחברות אינו זמין כרגע. נסה שוב בעוד כמה דקות.',
     invalid_request:'בדוק את הפרטים שהזנת ונסה שוב.',
@@ -35,7 +35,7 @@ export function loginClientSource(returnTo) {
     busy = value;
     byId('auth-card').setAttribute('aria-busy', String(value));
     byId('signin-controls').disabled = value || !ready;
-    byId('mfa-controls').disabled = value || !ready;
+    byId('mfa-controls').disabled = value || !ready || !requireMfa;
     byId('password-controls').disabled = value || !ready;
     for (const id of ['retry-session','refresh-session','logout','success-logout','password-logout']) byId(id).disabled = value;
     byId('confirm-logout').disabled = value || !ready || logoutConfirmed;
@@ -90,13 +90,22 @@ export function loginClientSource(returnTo) {
       return parsed.pathname + parsed.search;
     } catch { return returnTo; }
   }
+  function setMfaPolicy(policy) {
+    requireMfa = policy?.requireMfa !== false;
+    byId('mfa-step').hidden = !requireMfa;
+    byId('signin-steps').dataset.mfaRequired = String(requireMfa);
+  }
+  function canEnter(result) {
+    return result.authenticated === true && result.mfaRequired === false &&
+      (result.identity?.aal === 'aal2' || (!requireMfa && result.identity?.aal === 'aal1'));
+  }
   function showSuccess(identity, target, navigate) {
     clearSecrets();
     if (passwordSettings) {
       showView('password');
       byId('password-account').textContent = typeof identity.email === 'string' ? identity.email : '';
       byId('password-continue').href = safeTarget(target);
-      status('החשבון אומת באימות נוסף. אפשר להגדיר סיסמה לכניסות הבאות.');
+      status(requireMfa ? 'החשבון אומת באימות נוסף. אפשר להגדיר סיסמה לכניסות הבאות.' : 'החשבון אומת. אפשר להגדיר סיסמה לכניסות הבאות.');
       return;
     }
     showView('success');
@@ -138,6 +147,7 @@ export function loginClientSource(returnTo) {
       if (session.configured !== true || typeof session.csrfToken !== 'string' || !/^[a-f0-9]{64}$/.test(session.csrfToken)) throw {code:'auth_unavailable',legacyAccessFallback:session.legacyAccessFallback === true};
       csrfToken = session.csrfToken;
       ready = true;
+      setMfaPolicy(session.policy);
       setEmailOtpAvailability(session.methods?.emailOtp !== false);
       if (logoutRequested && !logoutConfirmed) {
         clearSecrets();
@@ -154,9 +164,12 @@ export function loginClientSource(returnTo) {
         }
         return;
       }
-      if (session.authenticated === true && session.identity?.aal === 'aal2' && session.mfaRequired === false) showSuccess(session.identity, returnTo, false);
-      else if (session.authenticated === true && session.identity) renderMfa(session);
-      else {
+      if (session.authenticated === true) {
+        if (!['aal1','aal2'].includes(session.identity?.aal)) throw {code:'auth_unavailable'};
+        if (canEnter(session)) showSuccess(session.identity, returnTo, !requireMfa && session.identity.aal === 'aal1');
+        else if (requireMfa) renderMfa(session);
+        else throw {code:'auth_unavailable'};
+      } else {
         clearSecrets();
         resetOtp();
         showView('signin');
@@ -243,7 +256,7 @@ export function loginClientSource(returnTo) {
     byId('password').value = '';
     byId('email-code').value = '';
     if (result.authenticated !== true || !result.identity) throw {code:'auth_unavailable'};
-    if (result.identity.aal === 'aal2' && result.mfaRequired === false) showSuccess(result.identity, result.returnTo, true);
+    if (canEnter(result)) showSuccess(result.identity, result.returnTo, true);
     else await loadSession();
   }
   byId('signin-form').addEventListener('submit', event => {
@@ -286,7 +299,7 @@ export function loginClientSource(returnTo) {
     location.assign(destination.href);
   }));
   byId('mfa-factor').addEventListener('change', () => { factorId = byId('mfa-factor').value; byId('mfa-code').value = ''; });
-  byId('mfa-enroll').addEventListener('click', () => run(async () => {
+  byId('mfa-enroll').addEventListener('click', () => { if (!requireMfa) return; run(async () => {
     const result = await api('mfa/enroll', {});
     if (typeof result.factorId !== 'string' || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(result.factorId) || typeof result.qrCode !== 'string' || result.qrCode.length > 60000 || !/^data:image\/svg\+xml(?:;base64)?,/.test(result.qrCode) || typeof result.secret !== 'string' || !/^[A-Z2-7]{8,200}$/i.test(result.secret)) throw {code:'auth_unavailable'};
     factorId = result.factorId;
@@ -298,7 +311,7 @@ export function loginClientSource(returnTo) {
     byId('mfa-instruction').textContent = 'סרוק את הקוד באפליקציית אימות, ואז הזן כאן את הקוד בן 6 הספרות שמופיע בה.';
     status('ההגדרה תושלם רק לאחר אימות הקוד מהאפליקציה.');
     focusWhenReady('mfa-code');
-  }));
+  }); });
   byId('copy-secret').addEventListener('click', async () => {
     try {
       if (!navigator.clipboard?.writeText) throw new Error();
@@ -308,7 +321,7 @@ export function loginClientSource(returnTo) {
   });
   byId('mfa-form').addEventListener('submit', event => {
     event.preventDefault();
-    if (!byId('mfa-form').reportValidity()) return;
+    if (!requireMfa || !byId('mfa-form').reportValidity()) return;
     run(async () => {
       if (!factorId) throw {code:'invalid_request'};
       const challenge = await api('mfa/challenge', {factorId});

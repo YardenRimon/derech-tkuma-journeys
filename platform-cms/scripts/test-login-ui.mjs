@@ -95,6 +95,7 @@ let ui = await boot([signedOut]);
 assert.equal(ui.element('signin-controls').disabled, false);
 assert.equal(ui.element('signin-view').hidden, false);
 assert.equal(ui.element('signin-submit').textContent, 'כניסה עם סיסמה');
+assert.equal(ui.element('mfa-step').hidden, false, 'absent policy keeps MFA required by default');
 await ui.emit('forgot-password');
 assert.equal(ui.element('panel-password').hidden, true);
 assert.equal(ui.element('panel-otp').hidden, false);
@@ -104,6 +105,59 @@ await ui.emit('tab-otp', 'keydown', { key: 'Home' });
 assert.equal(ui.element('panel-password').hidden, false);
 await ui.emit('toggle-password');
 assert.equal(ui.element('password').type, 'text');
+
+const pilotPolicy = { requireMfa: false };
+const pilotSignedOut = { ...signedOut, policy: pilotPolicy, methods: { ...methods, emailOtp: false } };
+const pilotSession = { configured: true, authenticated: true, csrfToken: token, identity, mfaRequired: false, policy: pilotPolicy, methods: pilotSignedOut.methods };
+ui = await boot([pilotSession], '?mfa=required');
+assert.deepEqual(ui.destinations, ['https://preview.example/admin/tasks'], 'explicit optional server policy returns verified AAL1 to admin despite a stale MFA query');
+assert.equal(ui.element('mfa-view').hidden, true);
+assert.equal(ui.element('mfa-step').hidden, true, 'optional policy removes mandatory second-step introduction');
+assert.equal(ui.element('signin-steps').dataset.mfaRequired, 'false');
+assert.equal(ui.element('mfa-controls').disabled, true);
+assert.equal(ui.element('tab-otp').disabled, true, 'the pilot does not enable email OTP');
+await ui.emit('mfa-enroll');
+await ui.emit('mfa-form', 'submit');
+assert.deepEqual(ui.requests.map(request => request.url), ['/api/auth/session'], 'optional entry never enrolls, lists factors, challenges or verifies MFA');
+
+for (const policy of [undefined, {}, { requireMfa: true }, { requireMfa: 'false' }, { requireMfa: 0 }]) {
+  ui = await boot([{ ...mfaSession(), mfaRequired: false, ...(policy === undefined ? {} : { policy }) }], '?mfa=optional&requireMfa=false');
+  assert.equal(ui.destinations.length, 0, 'missing, enabled or malformed policy cannot grant AAL1 entry');
+  assert.equal(ui.element('mfa-view').hidden, false);
+  assert.equal(ui.element('mfa-step').hidden, false);
+}
+
+ui = await boot([pilotSignedOut, { authenticated: true, identity, mfaRequired: false, returnTo: '/admin/tasks' }]);
+ui.element('email').value = identity.email;
+ui.element('password').value = 'a personal existing password';
+await ui.emit('signin-form', 'submit');
+assert.deepEqual(ui.destinations, ['https://preview.example/admin/tasks'], 'password login respects the verified session policy and mfaRequired result');
+assert.deepEqual(ui.requests.map(request => request.url), ['/api/auth/session','/api/auth/password']);
+
+ui = await boot([pilotSignedOut, { authenticated: true, identity, mfaRequired: true }, { status: 503, body: { error: { code: 'auth_unavailable' } } }]);
+ui.element('email').value = identity.email;
+ui.element('password').value = 'a personal existing password';
+await ui.emit('signin-form', 'submit');
+assert.equal(ui.destinations.length, 0, 'a failed session after login never grants entry');
+assert.equal(ui.element('unavailable-view').hidden, false);
+assert.equal(ui.element('success-view').hidden, true);
+
+ui = await boot([{ status: 503, body: { ...pilotSession, error: { code: 'auth_unavailable' } } }], '?mfa=optional');
+assert.equal(ui.destinations.length, 0, 'an error response cannot grant entry even if it contains authenticated-looking fields');
+assert.equal(ui.element('signin-controls').disabled, true);
+assert.equal(ui.element('unavailable-view').hidden, false);
+
+ui = await boot([pilotSession, { passwordUpdated: true }], '?settings=password&mfa=required');
+assert.equal(ui.destinations.length, 0, 'password settings stay available instead of automatically returning to CMS');
+assert.equal(ui.element('password-view').hidden, false);
+assert.equal(ui.element('mfa-view').hidden, true);
+assert.doesNotMatch(ui.element('auth-status').textContent, /אימות נוסף/);
+ui.element('new-password').value = 'A personal pilot password';
+ui.element('confirm-password').value = 'A personal pilot password';
+await ui.emit('password-set-form', 'submit');
+assert.equal(ui.requests[1].url, '/api/auth/password/set');
+assert.equal(ui.element('new-password').value, '');
+assert.match(ui.element('auth-status').textContent, /הסיסמה נשמרה/);
 
 const withoutEmailOtp = { ...signedOut, methods: { ...methods, emailOtp: false } };
 ui = await boot([withoutEmailOtp, { authenticated: true, identity, mfaRequired: true }, { ...mfaSession(true), methods: withoutEmailOtp.methods }, { challengeId: challenge }, verified]);
@@ -271,4 +325,4 @@ assert.equal(ui.requests[1].url, '/api/auth/logout');
 assert.equal(ui.element('signin-view').hidden, false);
 assert.equal(ui.element('mfa-secret').textContent, '');
 
-console.log('PASS login UI: Hebrew RTL/original branding, unique nonce CSP/noindex/no-store, safe destinations and DOM, syntax, password/email OTP8, TOTP6 enrollment/challenge/verification, unavailable/retry/logout, OAuth redirect restriction, AAL2-only password setting and secret cleanup.');
+console.log('PASS login UI: Hebrew RTL/original branding, unique nonce CSP/noindex/no-store, safe destinations and DOM, syntax, password/email OTP8, TOTP6 enrollment/challenge/verification, unavailable/retry/logout, OAuth redirect restriction, explicit optional-MFA AAL1 policy/default MFA enforcement, password setting and secret cleanup.');

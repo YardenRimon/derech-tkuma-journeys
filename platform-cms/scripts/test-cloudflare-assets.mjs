@@ -8,7 +8,7 @@ import{createHash}from'node:crypto';
 const root=fileURLToPath(new URL('../',import.meta.url));
 // Bundle the actual wrapper; only Vinext and diagnostic collaborators are stubbed.
 // The stub reproduces the publicFiles-only behavior: a build chunk would be 404.
-const bundled=await build({entryPoints:[path.join(root,'build/cloudflare-worker.ts')],bundle:true,write:false,format:'esm',platform:'browser',target:'es2022',define:{__PLATFORM_AUTH_PROVIDER__:JSON.stringify('cloudflare-access')},external:['cloudflare:workers'],logLevel:'silent',plugins:[{name:'offline-collaborators',setup(b){
+const bundled=await build({entryPoints:[path.join(root,'build/cloudflare-worker.ts')],bundle:true,write:false,format:'esm',platform:'browser',target:'es2022',define:{__PLATFORM_AUTH_PROVIDER__:JSON.stringify('cloudflare-access'),__PLATFORM_AUTH_REQUIRE_MFA__:'true'},external:['cloudflare:workers'],logLevel:'silent',plugins:[{name:'offline-collaborators',setup(b){
  b.onResolve({filter:/^vinext\/server\/fetch-handler$/},()=>({path:'handler',namespace:'fixture'}));
  b.onResolve({filter:/lib\/cloudflare-access$/},()=>({path:'diagnostics',namespace:'fixture'}));
  b.onResolve({filter:/lib\/platform-auth$/},()=>({path:'auth',namespace:'fixture'}));

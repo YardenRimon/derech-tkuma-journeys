@@ -12,7 +12,7 @@ export default defineConfig(async () => {
   if(standalone){assertNode24();validateCloudflareConfig(portable);if(!/^[a-f0-9]{40}$/.test(process.env.PLATFORM_RELEASE_SHA??''))throw new Error('Use the checked Cloudflare build with full source SHA');}
   const { cloudflare } = await import("@cloudflare/vite-plugin");
   return {
-    define: { __PLATFORM_AUTH_PROVIDER__: JSON.stringify(standalone?(portable.vars.PLATFORM_AUTH_MODE??'cloudflare-access'):'sites') },
+    define: { __PLATFORM_AUTH_PROVIDER__: JSON.stringify(standalone?(portable.vars.PLATFORM_AUTH_MODE??'cloudflare-access'):'sites'), __PLATFORM_AUTH_REQUIRE_MFA__: JSON.stringify(!standalone || portable.vars.PLATFORM_AUTH_REQUIRE_MFA !== 'false') },
     server: { host:'127.0.0.1', watch: { useFsEvents: false, usePolling: true } },
     plugins: [vinext(), ...(standalone?[compressedSourcePages()]:[]), ...(!standalone?[sites({mockAuth:true})]:[]), cloudflare({
       viteEnvironment: { name: "rsc", childEnvironments: ["ssr"] }, inspectorPort:false,

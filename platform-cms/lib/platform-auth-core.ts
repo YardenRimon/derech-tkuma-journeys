@@ -1,5 +1,5 @@
 /** Shared managed identity boundary. Authentication never grants tenant membership. */
-export type PlatformAuthConfig={url:string;publishableKey:string;origin:string;emailOtpReady:boolean};
+export type PlatformAuthConfig={url:string;publishableKey:string;origin:string;emailOtpReady:boolean;requireMfa:boolean};
 export const PLATFORM_AUTH_PROJECT_URL='https://uawcxvkekfqxosfblpxr.supabase.co';
 export type PlatformIdentity={userId:string;email:string;displayName:string;fullName:string|null;aal:'aal1'|'aal2'};
 export type CookieValue={name:string;value:string;options?:{maxAge?:number;expires?:Date;path?:string;domain?:string;httpOnly?:boolean;secure?:boolean;sameSite?:string|boolean}};
@@ -13,7 +13,9 @@ export function platformAuthConfig(env:Record<string,unknown>):PlatformAuthConfi
  const url=env.PLATFORM_AUTH_SUPABASE_URL,key=env.PLATFORM_AUTH_SUPABASE_PUBLISHABLE_KEY,origin=env.PLATFORM_AUTH_ORIGIN;
  if(url!==PLATFORM_AUTH_PROJECT_URL||typeof key!=='string'||!/^sb_publishable_[A-Za-z0-9_-]{12,200}$/.test(key)||typeof origin!=='string')return authFailure(503,'auth_unavailable');
  try{const parsed=new URL(origin);if(parsed.origin!==origin||parsed.protocol!=='https:'||parsed.username||parsed.password)throw 0;}catch{return authFailure(503,'auth_unavailable');}
- return{url,publishableKey:key,origin,emailOtpReady:env.PLATFORM_AUTH_EMAIL_OTP_READY==='true'};
+ const mfa=env.PLATFORM_AUTH_REQUIRE_MFA;
+ if(mfa!==undefined&&mfa!=='true'&&mfa!=='false')return authFailure(503,'auth_unavailable');
+ return{url,publishableKey:key,origin,emailOtpReady:env.PLATFORM_AUTH_EMAIL_OTP_READY==='true',requireMfa:mfa!=='false'};
 }
 export function safeAuthReturnTo(value:unknown):string{
  if(value===undefined||value===null||value==='')return'/admin/';
@@ -27,6 +29,19 @@ export function authUuid(value:unknown):string{if(typeof value!=='string'||!/^[a
 export function authCode(value:unknown):string{if(typeof value!=='string'||!/^\d{6}$/.test(value))return authFailure(400,'invalid_request');return value;}
 /** Managed project email OTPs are eight digits; authenticator TOTP stays six. */
 export function authEmailOtpCode(value:unknown):string{if(typeof value!=='string'||!/^\d{8}$/.test(value))return authFailure(400,'invalid_request');return value;}
+/** The installed SDK prefixes raw SVG with ;utf-8. Normalize that transport
+ * shape to a bounded image URI: raw # characters must never become fragments. */
+export function authQrCode(value:unknown):string{
+ if(typeof value!=='string'||value.length>60000)return authFailure(503,'auth_unavailable');
+ const match=/^data:image\/svg\+xml(?:;(utf-8|charset=utf-8|base64))?,([\s\S]*)$/i.exec(value);
+ if(!match)return authFailure(503,'auth_unavailable');
+ let svg:string;
+ try{svg=match[1]?.toLowerCase()==='base64'?new TextDecoder('utf-8',{fatal:true}).decode(Uint8Array.from(atob(match[2]),character=>character.charCodeAt(0))):match[2].trimStart().startsWith('<')?match[2]:decodeURIComponent(match[2]);}catch{return authFailure(503,'auth_unavailable');}
+ if(svg.length>60000||!/^\s*(?:<\?xml[^>]*\?>\s*)?<svg[\s/>]/i.test(svg))return authFailure(503,'auth_unavailable');
+ let binary='';for(const byte of new TextEncoder().encode(svg))binary+=String.fromCharCode(byte);
+ const result='data:image/svg+xml;base64,'+btoa(binary);
+ if(result.length>60000)return authFailure(503,'auth_unavailable');return result;
+}
 export class PlatformCookieJar{
  private values=new Map<string,string>();private changes=new Map<string,string>();
  constructor(header:string|null){

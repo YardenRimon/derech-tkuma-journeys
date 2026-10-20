@@ -1,4 +1,4 @@
-import{FLOW_COOKIE,PlatformAuthError,PlatformCookieJar,appendPlatformAuthCookies,assertAuthMutation,authCode,authEmailOtpCode,authFailure,authUuid,exactAuthFields,normalizeAuthEmail,randomAuthState,readAuthJson,safeAuthReturnTo,verifiedPlatformIdentity}from'./platform-auth-core';
+import{FLOW_COOKIE,PlatformAuthError,PlatformCookieJar,appendPlatformAuthCookies,assertAuthMutation,authCode,authEmailOtpCode,authFailure,authQrCode,authUuid,exactAuthFields,normalizeAuthEmail,randomAuthState,readAuthJson,safeAuthReturnTo,verifiedPlatformIdentity}from'./platform-auth-core';
 import type{ManagedAuthProvider,ManagedFactor,PlatformAuthConfig,PlatformIdentity,PlatformProviderFactory}from'./platform-auth-core';
 export type PlatformAuthLimiter=(request:Request,action:string,actor?:string)=>Promise<void>;
 export const platformAuthMessages:Record<string,string>={auth_unavailable:'שירות ההתחברות אינו זמין כרגע',method_unavailable:'כניסה בקוד במייל תהיה זמינה לאחר חיבור דומיין המערכת',invalid_request:'פרטי הבקשה אינם תקינים',csrf_rejected:'יש לרענן את עמוד ההתחברות ולנסות שוב',credentials_invalid:'לא ניתן להתחבר באמצעות הפרטים האלה',otp_invalid:'הקוד שגוי או שפג תוקפו',mfa_invalid:'קוד האימות הנוסף שגוי או שפג תוקפו',mfa_required:'נדרש אימות נוסף כדי להיכנס לניהול',rate_limited:'בוצעו ניסיונות רבים. נסה שוב בעוד כמה דקות',unauthenticated:'יש להתחבר מחדש',mfa_already_enrolled:'כבר מוגדר אימות נוסף לחשבון',callback_failed:'ההתחברות לא הושלמה. נסה שוב',password_update_failed:'לא ניתן לשמור את הסיסמה. התחבר מחדש ונסה שוב'};
@@ -8,7 +8,7 @@ function errorResponse(error:unknown){const known=error instanceof PlatformAuthE
 export function platformAuthUnavailable(){return appendPlatformAuthCookies(errorResponse(new PlatformAuthError(503,'auth_unavailable')),[]);}
 async function factors(provider:ManagedAuthProvider):Promise<ManagedFactor[]>{const result=await provider.mfa.listFactors();if(result.error||!Array.isArray(result.data?.all))return authFailure(503,'auth_unavailable');return result.data.all.filter(item=>item.factor_type==='totp'&&(item.status==='verified'||item.status==='unverified'));}
 async function ownFactor(provider:ManagedAuthProvider,value:unknown){const id=authUuid(value),all=await factors(provider);const factor=all.find(item=>item.id===id);if(!factor)return authFailure(400,'invalid_request');return factor;}
-async function loginResult(provider:ManagedAuthProvider,config:PlatformAuthConfig,returnTo:unknown,now:number){const identity=await verifiedPlatformIdentity(provider,config,false,now);return{authenticated:true,identity,mfaRequired:identity.aal!=='aal2',returnTo:safeAuthReturnTo(returnTo)};}
+async function loginResult(provider:ManagedAuthProvider,config:PlatformAuthConfig,returnTo:unknown,now:number){const identity=await verifiedPlatformIdentity(provider,config,false,now),requireMfa=config.requireMfa!==false;return{authenticated:true,identity,mfaRequired:requireMfa&&identity.aal!=='aal2',policy:{requireMfa},returnTo:safeAuthReturnTo(returnTo)};}
 /** All provider exceptions are redacted. No password/token/challenge/TOTP secret
  * is logged, put in URLs, echoed in an error, or returned as a browser session. */
 export async function handlePlatformAuth(request:Request,options:AuthServiceOptions):Promise<Response>{
@@ -27,14 +27,14 @@ export async function handlePlatformAuth(request:Request,options:AuthServiceOpti
    jar.set(FLOW_COOKIE,'',0);
    const provider=providerFactory(config,jar);try{const exchange=await provider.exchangeCodeForSession(code);if(exchange.error)return authFailure(401,'callback_failed');}finally{jar.clearFlow();}
    const identity=await verifiedPlatformIdentity(provider,config,false,now());
-   const location=identity.aal==='aal2'?flow.returnTo:'/login/?mfa=required&next='+encodeURIComponent(flow.returnTo);
+   const location=config.requireMfa===false||identity.aal==='aal2'?flow.returnTo:'/login/?mfa=required&next='+encodeURIComponent(flow.returnTo);
    response=new Response(null,{status:303,headers:{location}});
   }else if(action==='session'&&request.method==='GET'){
    await limiter(request,'session');const csrfToken=jar.csrf(),provider=providerFactory(config,jar);let identity:PlatformIdentity|null=null;
    try{identity=await verifiedPlatformIdentity(provider,config,false,now());}catch(error){if(!(error instanceof PlatformAuthError)||error.status!==401)throw error;jar.clearAuth();}
-   const methods={google:true,password:true,emailOtp:config.emailOtpReady===true};
-   if(!identity)response=json({configured:true,authenticated:false,csrfToken,methods});
-   else response=json({configured:true,authenticated:true,csrfToken,methods,identity,mfaRequired:identity.aal!=='aal2',factors:(await factors(provider)).map(item=>({id:item.id,friendlyName:item.friendly_name??'אפליקציית אימות',status:item.status}))});
+   const methods={google:true,password:true,emailOtp:config.emailOtpReady===true},requireMfa=config.requireMfa!==false,policy={requireMfa};
+   if(!identity)response=json({configured:true,authenticated:false,csrfToken,methods,policy});
+   else response=json({configured:true,authenticated:true,csrfToken,methods,policy,identity,mfaRequired:requireMfa&&identity.aal!=='aal2',...(requireMfa?{factors:(await factors(provider)).map(item=>({id:item.id,friendlyName:item.friendly_name??'אפליקציית אימות',status:item.status}))}:{})});
   }else{
    const allowed=['password','password/set','otp/send','otp/verify','oauth/google','logout','mfa/enroll','mfa/challenge','mfa/verify'];
    if(!allowed.includes(action)||request.method!=='POST')return authFailure(405,'invalid_request');
@@ -53,7 +53,7 @@ export async function handlePlatformAuth(request:Request,options:AuthServiceOpti
     const email=normalizeAuthEmail(input.email);if(typeof input.password!=='string'||input.password.length<1||input.password.length>1024)return authFailure(400,'invalid_request');await limiter(request,action,email);
     if((await provider.signInWithPassword({email,password:input.password})).error)return authFailure(401,'credentials_invalid');response=json(await loginResult(provider,config,input.returnTo,now()));
    }else if(action==='password/set'){
-    const identity=await verifiedPlatformIdentity(provider,config,true,now());await limiter(request,action,identity.userId);
+    const identity=await verifiedPlatformIdentity(provider,config,config.requireMfa!==false,now());await limiter(request,action,identity.userId);
     if(typeof input.password!=='string'||input.password.length<12||input.password.length>1024)return authFailure(400,'invalid_request');
     if((await provider.updateUser({password:input.password})).error)return authFailure(400,'password_update_failed');response=json({passwordUpdated:true});
    }else if(action==='otp/send'){
@@ -77,8 +77,8 @@ export async function handlePlatformAuth(request:Request,options:AuthServiceOpti
      // setup so reloading an enrollment does not strand the user at the limit.
      for(const pending of own.filter(factor=>factor.status==='unverified'&&factor.friendly_name==='Platform CMS'))if((await provider.mfa.unenroll({factorId:pending.id})).error)return authFailure(503,'auth_unavailable');
      const result=await provider.mfa.enroll({factorType:'totp',friendlyName:'Platform CMS',issuer:'Yarden Platform'});if(result.error||!result.data?.totp)return authFailure(503,'auth_unavailable');const totp=result.data.totp;
-     if(typeof totp.qr_code!=='string'||totp.qr_code.length>60000||!totp.qr_code.startsWith('data:image/svg+xml')||typeof totp.secret!=='string'||totp.secret.length>200||typeof totp.uri!=='string'||!totp.uri.startsWith('otpauth://totp/'))return authFailure(503,'auth_unavailable');
-     response=json({factorId:authUuid(result.data.id),qrCode:totp.qr_code,secret:totp.secret,uri:totp.uri});
+     if(typeof totp.secret!=='string'||totp.secret.length>200||typeof totp.uri!=='string'||!totp.uri.startsWith('otpauth://totp/'))return authFailure(503,'auth_unavailable');
+     response=json({factorId:authUuid(result.data.id),qrCode:authQrCode(totp.qr_code),secret:totp.secret,uri:totp.uri});
     }else if(action==='mfa/challenge'){
      const factor=await ownFactor(provider,input.factorId),result=await provider.mfa.challenge({factorId:factor.id});if(result.error||!result.data?.id)return authFailure(401,'mfa_invalid');response=json({challengeId:authUuid(result.data.id)});
     }else{
@@ -89,11 +89,11 @@ export async function handlePlatformAuth(request:Request,options:AuthServiceOpti
  }catch(error){response=errorResponse(error);if(error instanceof PlatformAuthError&&error.code==='unauthenticated')jar?.clearAuth();}
  return appendPlatformAuthCookies(response,jar?.pending()??[]);
 }
-export async function readVerifiedPlatformIdentity(request:Request,config:PlatformAuthConfig,providerFactory:PlatformProviderFactory,options:{requireAal2?:boolean}={requireAal2:true}){
+export async function readVerifiedPlatformIdentity(request:Request,config:PlatformAuthConfig,providerFactory:PlatformProviderFactory,options:{requireAal2?:boolean}={}){
  let jar:PlatformCookieJar|undefined;
  try{
   if(new URL(request.url).origin!==config.origin)return authFailure(401,'unauthenticated');
-  jar=new PlatformCookieJar(request.headers.get('cookie'));const identity=await verifiedPlatformIdentity(providerFactory(config,jar),config,options.requireAal2!==false);
+  jar=new PlatformCookieJar(request.headers.get('cookie'));const identity=await verifiedPlatformIdentity(providerFactory(config,jar),config,options.requireAal2??config.requireMfa!==false);
   return{identity,cookiesToSet:jar.pending()};
  }catch(error){
   const failure=error instanceof PlatformAuthError?error:new PlatformAuthError(503,'auth_unavailable');

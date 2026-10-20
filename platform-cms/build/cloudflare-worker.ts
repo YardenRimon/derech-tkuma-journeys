@@ -4,6 +4,7 @@ import {accessDiagnosticsEnabled,accessDiagnosticPath,ACCESS_DIAGNOSTIC_SCOPE_HE
 import { stripIdentityHeaders, platformAuthBoundary } from './platform-auth-boundary';
 import { readPlatformAuthIdentity, appendPlatformAuthCookies } from '../lib/platform-auth';
 declare const __PLATFORM_AUTH_PROVIDER__: 'cloudflare-access' | 'supabase';
+declare const __PLATFORM_AUTH_REQUIRE_MFA__: boolean;
 export default {
  async fetch(request:Request,env:Cloudflare.Env,ctx:ExecutionContext){
   // Caller-controlled Sites identity headers never cross the standalone boundary.
@@ -22,7 +23,7 @@ export default {
   let authCookies:string[]=[];
   let authResponse:Response|undefined;
   if(__PLATFORM_AUTH_PROVIDER__==='supabase'){
-   const authenticated=await platformAuthBoundary(sanitizedRequest,(input)=>readPlatformAuthIdentity(input,{requireAal2:true}));
+   const authenticated=await platformAuthBoundary(sanitizedRequest,(input)=>readPlatformAuthIdentity(input,{requireAal2:__PLATFORM_AUTH_REQUIRE_MFA__}),{requireMfa:__PLATFORM_AUTH_REQUIRE_MFA__});
    sanitizedRequest=authenticated.request;authCookies=authenticated.cookiesToSet;authResponse=authenticated.response;
   }
   const response=config.PLATFORM_RELEASE_STAGE!=='review'||!config.CF_ACCESS_ISSUER||!config.CF_ACCESS_AUDIENCE

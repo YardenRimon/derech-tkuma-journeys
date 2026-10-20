@@ -21,7 +21,7 @@ export default{async fetch(request,env){
 }};`;
 let runtime;
 try{
- const compiled=await build({entryPoints:[path.join(root,'build/cloudflare-worker.ts')],bundle:true,write:false,format:'esm',platform:'browser',target:'es2022',define:{__PLATFORM_AUTH_PROVIDER__:JSON.stringify('cloudflare-access')},external:['node:*','cloudflare:workers'],logLevel:'silent',plugins:[{name:'local-handler',setup(b){
+ const compiled=await build({entryPoints:[path.join(root,'build/cloudflare-worker.ts')],bundle:true,write:false,format:'esm',platform:'browser',target:'es2022',define:{__PLATFORM_AUTH_PROVIDER__:JSON.stringify('cloudflare-access'),__PLATFORM_AUTH_REQUIRE_MFA__:'true'},external:['node:*','cloudflare:workers'],logLevel:'silent',plugins:[{name:'local-handler',setup(b){
   b.onResolve({filter:/^vinext\/server\/fetch-handler$/},()=>({path:'handler',namespace:'fixture'}));
   b.onResolve({filter:/lib\/cloudflare-access$/},()=>({path:'diagnostics',namespace:'fixture'}));
   b.onLoad({filter:/.*/,namespace:'fixture'},({path:name})=>({contents:name==='handler'?handler:`export const accessDiagnosticsEnabled=()=>false,accessDiagnosticPath=()=>false,ACCESS_DIAGNOSTIC_SCOPE_HEADER='x-local-diagnostics',reportAccessHeaderPresence=()=>{};`,loader:'js',resolveDir:root}));

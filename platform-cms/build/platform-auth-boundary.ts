@@ -13,12 +13,13 @@ export function isCmsBrowserPath(pathname: string): boolean {
 type VerifiedIdentity = { userId: string; email: string; displayName: string; fullName: string | null; aal: 'aal1' | 'aal2' };
 type AuthResult = { identity: VerifiedIdentity; cookiesToSet: string[] };
 type AuthFailure = { status?: number; code?: string; cookiesToSet?: string[] };
-export async function platformAuthBoundary(request: Request, verify: (request: Request) => Promise<AuthResult>): Promise<{ request: Request; response?: Response; cookiesToSet: string[] }> {
+export async function platformAuthBoundary(request: Request, verify: (request: Request) => Promise<AuthResult>, policy: { requireMfa?: boolean } = {}): Promise<{ request: Request; response?: Response; cookiesToSet: string[] }> {
   const url = new URL(request.url);
   if (!isCmsBrowserPath(url.pathname)) return { request, cookiesToSet: [] };
   try {
     const { identity, cookiesToSet } = await verify(request);
-    if (identity.aal !== 'aal2') throw { status: 403, code: 'mfa_required', cookiesToSet };
+    if (identity.aal !== 'aal1' && identity.aal !== 'aal2') throw { status: 401, code: 'unauthenticated', cookiesToSet };
+    if (policy.requireMfa !== false && identity.aal !== 'aal2') throw { status: 403, code: 'mfa_required', cookiesToSet };
     const headers = new Headers(request.headers);
     headers.set(identityHeaderPrefix + 'id', identity.userId);
     headers.set(identityHeaderPrefix + 'email', identity.email);

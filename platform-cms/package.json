@@ -22,7 +22,7 @@
     "build:cloudflare": "node scripts/build-cloudflare.mjs",
     "test:machine-http": "node scripts/test-machine-execution-http.mjs",
     "test:access-workerd": "node scripts/test-cloudflare-access-workerd.mjs",
-    "test:platform-auth": "node scripts/test-platform-auth.mjs && node --experimental-strip-types scripts/test-platform-auth-boundary.mjs && node scripts/test-platform-membership.mjs && node scripts/test-login-ui.mjs && node scripts/test-platform-auth-live.mjs"
+    "test:platform-auth": "node scripts/test-platform-auth.mjs && node --experimental-strip-types scripts/test-platform-auth-boundary.mjs && node scripts/test-platform-membership.mjs && node scripts/test-login-ui.mjs && node scripts/test-platform-auth-live.mjs && node scripts/test-platform-auth-policy.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
