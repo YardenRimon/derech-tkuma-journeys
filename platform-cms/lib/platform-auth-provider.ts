@@ -2,6 +2,13 @@ import { createServerClient } from '@supabase/ssr';
 import { AUTH_COOKIE, PlatformAuthError } from './platform-auth-core';
 import type { PlatformProviderFactory } from './platform-auth-core';
 
+type AuthOperation = 'user_lookup' | 'session_refresh' | 'other_auth';
+function reportProviderFailure(operation: AuthOperation, kind: 'timeout' | 'network' | 'http', attempt: 1 | 2, status?: number) {
+  // Construct a closed record. Raw exceptions and request/response material
+  // (including URLs, identity, credentials and tokens) never reach a logger.
+  try { console.warn({ event: 'platform_auth_provider_failure', operation, kind, attempt, ...(status === undefined ? {} : { status }) }); } catch { /* Diagnostics cannot affect authentication. */ }
+}
+
 /** Transport exists only in this server-side module. A fresh SDK instance and
  * cookie jar belong to one request; neither is cached or exposed to the UI. */
 export const createManagedPlatformProvider: PlatformProviderFactory = (config, jar) => {
@@ -18,12 +25,30 @@ export const createManagedPlatformProvider: PlatformProviderFactory = (config, j
     global: {
       fetch: async (input, init) => {
         const target = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
-        if (target.origin !== config.url || !target.pathname.startsWith('/auth/v1/')) {
+        if (target.origin !== config.url || target.username || target.password || target.hash || !target.pathname.startsWith('/auth/v1/')) {
           throw new PlatformAuthError(503, 'auth_unavailable');
         }
+        const method = (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase();
+        const userLookup = method === 'GET' && target.pathname === '/auth/v1/user' && !target.search;
+        const operation: AuthOperation = userLookup ? 'user_lookup' : method === 'POST' && target.pathname === '/auth/v1/token' && target.searchParams.get('grant_type') === 'refresh_token' ? 'session_refresh' : 'other_auth';
         // Never forward this request's cookies, headers, or origin to a second
         // host through an upstream redirect. Supabase receives its own SDK data.
-        return fetch(input, { ...init, redirect: 'manual', signal: AbortSignal.timeout(10000) });
+        // Only the exact read-only identity lookup gets one transport retry.
+        // Both attempts use the same token and fresh remote data; HTTP errors,
+        // redirects and every mutation/refresh remain single-attempt.
+        for (const attempt of [1, 2] as const) {
+          const signal = AbortSignal.timeout(attempt === 1 ? 10000 : 2500);
+          try {
+            const response = await fetch(input, { ...init, cache: 'no-store', redirect: 'manual', signal });
+            if (response.status < 200 || response.status >= 300) reportProviderFailure(operation, 'http', attempt, response.status);
+            return response;
+          } catch (error) {
+            const timeout = signal.aborted || (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError'));
+            reportProviderFailure(operation, timeout ? 'timeout' : 'network', attempt);
+            if (!userLookup || attempt === 2) throw new PlatformAuthError(503, 'auth_unavailable');
+          }
+        }
+        throw new PlatformAuthError(503, 'auth_unavailable');
       },
     },
   });
