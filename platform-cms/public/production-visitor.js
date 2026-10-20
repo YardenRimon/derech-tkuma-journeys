@@ -54,7 +54,7 @@ export function installProductionVisitor(window,document,configuration){
   start();ui.close();try{channel?.postMessage({changed:true});}catch{}
  };
  const ui=renderConsentUi(document,{choose,preferences:open=>open(state),revoke:()=>choose(false,false)});
- const sync=()=>{const current=read();if(!current){if(state.analytics||state.marketing){state=consentValue(false,false,revision);stop();clearProviderCookies();}ui.show();return;}if(current.analytics!==state.analytics||current.marketing!==state.marketing){state=current;start();}};
+ const sync=()=>{const current=read();if(!current){if(state.analytics||state.marketing){state=consentValue(false,false,revision);stop();clearProviderCookies();}ui.show();return;}if(current.analytics!==state.analytics||current.marketing!==state.marketing||!frame&&config.configuration&&(current.analytics||current.marketing)){state=current;start();}};
  if(channel)channel.onmessage=sync;
  const click=event=>{
   const a=event.target.closest?.('a[href]');if(event.defaultPrevented||!a||!state.analytics||!frameReady)return;

@@ -1,6 +1,6 @@
-# Independent owner VPS watchdog — prepared only
+# Independent owner VPS watchdog
 
-This separate Worker evaluates the existing private R2 heartbeat outside the VPS. It adds no Telegram intake, tenant sender, outbox or poller. The optional direct owner DM is a narrow exception that still requires explicit approval for credential transfer and activation. **No deployment, credential transfer, real message or live outage/recovery acceptance has been performed by this change.** `ENABLE_NOTIFY` must equal the exact string `true`; omission and all other values send nothing.
+This separate Worker evaluates the existing private R2 heartbeat outside the VPS. It adds no Telegram intake, tenant sender, outbox or poller. The optional direct owner DM is a narrow exception that still requires explicit approval for credential transfer and activation. Actual deployment, credential approval and opening/recovery receipts are recorded in the private operational work-state, never inferred from this public source or its fixtures. `ENABLE_NOTIFY` must equal the exact string `true`; omission and all other values send nothing.
 
 ## Fixed boundaries
 
