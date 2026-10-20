@@ -23,6 +23,10 @@ HEALTH = (
     (Path('/var/lib/yarden-answer-broker/broker-health.json'), 'broker', 10001),
     (Path('/var/lib/yarden-answer-worker/worker-health.json'), 'worker', 990),
 )
+SERVICE_HEALTH = (
+    (Path('/run/yarden-site-review-heartbeat/broker-health.json'), 'broker', 10001),
+    (Path('/run/yarden-site-review-heartbeat/worker-health.json'), 'worker', 990),
+)
 CONTAINER = 'yarden-shared-platform-derech-legacy-1'
 MAX_BYTES = 32768
 
@@ -94,7 +98,7 @@ def file_ready(value, *, mode, now):
         return False
 
 
-def readiness(*, now, execute=subprocess.run, read=protected_json):
+def readiness(*, now, execute=subprocess.run, read=protected_json, health_paths=HEALTH):
     """Fresh completed runtime cycles plus real existing container health.
 
     This establishes bounded VPS/runtime liveness, not CMS task completion,
@@ -114,7 +118,7 @@ def readiness(*, now, execute=subprocess.run, read=protected_json):
             fields.get('ActiveState') == 'active' and fields.get('SubState') == 'running'
             for fields in units.values()), 'unit_not_running')
         require(all(file_ready(read(path, uid=uid), mode=mode, now=now)
-                    for path, mode, uid in HEALTH), 'runtime_not_ready')
+                    for path, mode, uid in health_paths), 'runtime_not_ready')
         fmt = '{"running":{{json .State.Running}},"restarting":{{json .State.Restarting}},"health":{{json .State.Health.Status}},"failingStreak":{{json .State.Health.FailingStreak}}}'
         result = execute(['/usr/bin/docker', '--config', '/opt/yarden-site-monitor/docker-config',
                           'inspect', '--type', 'container', '--format', fmt, CONTAINER],
@@ -192,10 +196,14 @@ def run(*, check=False, gate=allowed, load=configuration, collect=readiness, sen
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--check', action='store_true', help='Readiness only; never read the HMAC or make a network request')
+    parser.add_argument('--service-health-view', action='store_true',
+                        help='Read only the two fixed read-only systemd health mounts')
     args = parser.parse_args(argv)
     if os.geteuid() != 0:
         print('{"state":"deployment_owner_required"}'); return 2
-    report, code = run(check=args.check)
+    health_paths = SERVICE_HEALTH if args.service_health_view else HEALTH
+    report, code = run(check=args.check,
+                       collect=lambda **kwargs: readiness(health_paths=health_paths, **kwargs))
     print(json.dumps(report, sort_keys=True))
     return code
 

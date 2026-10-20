@@ -34,6 +34,20 @@ def execute(args, **kwargs):
 
 
 class ProducerReadinessTests(unittest.TestCase):
+    def test_service_health_view_is_fixed_fresh_and_has_no_private_path_fallback(self):
+        seen = []
+        def read(path, uid):
+            seen.append((path, uid))
+            return health('broker' if 'broker' in str(path) else 'worker')
+        self.assertTrue(m.readiness(now=NOW, execute=execute, read=read, health_paths=m.SERVICE_HEALTH))
+        self.assertEqual(seen, [(entry[0], entry[2]) for entry in m.SERVICE_HEALTH])
+        self.assertTrue(all(str(path).startswith('/run/yarden-site-review-heartbeat/') for path, _ in seen))
+        missing = Mock(side_effect=FileNotFoundError('mounted-file-missing'))
+        self.assertFalse(m.readiness(now=NOW, execute=execute, read=missing, health_paths=m.SERVICE_HEALTH))
+        self.assertEqual(missing.call_count, 1)
+        self.assertFalse(m.readiness(now=NOW, execute=execute, health_paths=m.SERVICE_HEALTH,
+                                    read=lambda path, uid: health('broker' if 'broker' in str(path) else 'worker', NOW-91)))
+
     def test_actual_unit_file_cycles_and_container_health_are_all_required(self):
         read = lambda path, uid: health('broker' if 'broker' in str(path) else 'worker')
         self.assertTrue(m.readiness(now=NOW, execute=execute, read=read))
