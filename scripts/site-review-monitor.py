@@ -103,10 +103,12 @@ def request(path, token):
         # Do not read/log error pages, request headers, provider messages or URLs.
         return error.code, {}, b''
 
-def observe(release, token=None, *, transport=request, clock=time.time, monotonic=time.monotonic):
+def observe(release, token=None, *, expected_pages=37, transport=request, clock=time.time, monotonic=time.monotonic):
     if TARGET != 'sites' and token is not None:
         raise ProbeError('public_target_credential_rejected')
     if not isinstance(release, str) or not re.fullmatch(r'[a-f0-9]{64}', release):
+        raise ProbeError('expected_release_invalid')
+    if type(expected_pages) is not int or expected_pages not in (37, 51):
         raise ProbeError('expected_release_invalid')
     started = clock(); results = []
     for name, path in PROBES:
@@ -120,7 +122,7 @@ def observe(release, token=None, *, transport=request, clock=time.time, monotoni
                     value = json.loads(body)
                 except (ValueError, UnicodeError):
                     value = None
-                if not isinstance(value, dict) or value.get('status') != 'ready' or value.get('mode') != 'review' or value.get('contentRelease') != release or value.get('pages') != 37:
+                if not isinstance(value, dict) or value.get('status') != 'ready' or value.get('mode') != 'review' or value.get('contentRelease') != release or value.get('pages') != expected_pages:
                     code = 'health_mismatch'
             elif name in ('home', 'interior'):
                 parser = RobotsParser(); parser.feed(body.decode('utf-8'))
@@ -219,9 +221,10 @@ def main(argv=None):
         with os.fdopen(os.open(lock, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600), 'r+') as handle:
             fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
             previous = protected_json(args.state, owner_uid=os.geteuid()) if args.state.exists() else None
-            release = json.loads(args.release_file.read_text())['contentRelease']
+            release_config = json.loads(args.release_file.read_text())
+            release = release_config['contentRelease']
             token = None if args.public_only or TARGET == 'cloudflare' else service_token(args.service_config)
-            observation = observe(release, token)
+            observation = observe(release, token, expected_pages=release_config['pages'])
             receipt = protected_json(args.opening_receipt) if args.opening_receipt and args.opening_receipt.exists() else None
             state, output = transition(previous, observation, now=time.time(), opening_receipt=receipt)
             atomic_json(args.state, state)

@@ -116,6 +116,19 @@ class ProbeTests(unittest.TestCase):
         self.assertNotIn(SECRET, json.dumps(result))
         self.assertEqual(len(result['probes']), 4)
 
+    def test_current_source_inventory_is_pinned_and_not_learned_from_health(self):
+        def transport(path, token):
+            status, headers, body = self.transport(path, token)
+            if path == '/api/health':
+                value = json.loads(body); value['pages'] = 51; body = json.dumps(value).encode()
+            return status, headers, body
+        with patch.object(m, 'ASSET_SHA', m.hashlib.sha256(b'asset').hexdigest()):
+            self.assertTrue(m.observe(RELEASE, SECRET, expected_pages=51, transport=transport)['ok'])
+            self.assertFalse(m.observe(RELEASE, SECRET, expected_pages=37, transport=transport)['ok'])
+            for invalid in (True, '51', None, 0, 52):
+                with self.assertRaisesRegex(m.ProbeError, 'expected_release_invalid'):
+                    m.observe(RELEASE, SECRET, expected_pages=invalid, transport=transport)
+
     def test_health_release_mode_and_ready_are_enforced(self):
         for changed in ({'contentRelease': 'b' * 64}, {'mode': 'production'}, {'status': 'starting'}, {'pages': 36}):
             def transport(path, token):

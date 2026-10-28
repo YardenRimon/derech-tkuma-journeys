@@ -152,11 +152,12 @@ class AuditTests(unittest.TestCase):
 
     def test_current_authoritative_seed_and_unknown_business_fields(self):
         value = self.source_projection()
+        self.assertEqual({"source-product-7681", "source-product-7899", "source-product-7882", "source-product-7891", "source-product-8249", "source-product-8251", "source-product-8253", "source-product-8255", "source-product-8257"}, {row["id"] for row in value["occurrences"]["records"]})
         before = copy.deepcopy(value)
         result = self.run_audit(value)
-        self.assertEqual((4, 6, 16), (result["published_tours"], result["published_occurrences"], len(result["proposals"])))
+        self.assertEqual((4, 9, 16), (result["published_tours"], result["published_occurrences"], len(result["proposals"])))
         self.assertEqual(before, value, "unknown times/capacity must never be filled or mutated")
-        self.assertEqual(6, len(result["unknown_occurrence_fields"]))
+        self.assertEqual(9, len(result["unknown_occurrence_fields"]))
         self.assertTrue(all(row["fields"] == ["startsAt", "endsAt", "capacity", "meetingPoint"]
                             for row in result["unknown_occurrence_fields"]))
         for row in value["tours"]["records"]:
