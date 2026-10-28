@@ -133,4 +133,29 @@ class BundleTests(unittest.TestCase):
   with self.assertRaises(ValueError):fn(self.config['archiveUrl'],target,opener=opener,clock=lambda:next(times))
   self.assertFalse(target.exists())
 
+ def test_transient_download_retry_is_bounded_and_never_retries_permission_or_tls(self):
+  from urllib.error import HTTPError
+  import ssl
+  fn=CLI['download_archive'];url=self.config['archiveUrl'];target=self.root/'retry.tgz'
+  class Response(io.BytesIO):
+   status=200;headers={'content-length':'6'}
+   def __init__(self):super().__init__(b'abcdef')
+  class Opener:
+   def __init__(self,failures):self.calls=0;self.failures=failures
+   def open(self,request,**kwargs):
+    self.calls+=1;self.request=request
+    if self.failures:
+     error=self.failures.pop(0)
+     raise error
+    return Response()
+  opener=Opener([HTTPError(url,503,'PRIVATE-CANARY',{},None)])
+  sleeps=[];fn(url,target,opener=opener,sleep=sleeps.append);self.assertEqual(opener.calls,2);self.assertEqual(sleeps,[1]);self.assertEqual(target.read_bytes(),b'abcdef');self.assertEqual(opener.request.get_header('Cache-control'),'no-cache')
+  for error,reason in [(HTTPError(url,403,'PRIVATE-CANARY',{},None),'http_403'),(ssl.SSLError('PRIVATE-CANARY'),'tls_error')]:
+   opener=Opener([error]);sleeps=[]
+   with self.assertRaisesRegex(ValueError,reason)as caught:fn(url,target,opener=opener,sleep=sleeps.append)
+   self.assertEqual(opener.calls,1);self.assertEqual(sleeps,[]);self.assertFalse(target.exists());self.assertNotIn('PRIVATE-CANARY',str(caught.exception))
+  opener=Opener([HTTPError(url,503,'PRIVATE-CANARY',{},None)for _ in range(3)]);sleeps=[]
+  with self.assertRaisesRegex(ValueError,'http_503'):fn(url,target,opener=opener,sleep=sleeps.append)
+  self.assertEqual(opener.calls,3);self.assertEqual(sleeps,[1,3]);self.assertFalse(target.exists())
+
 if __name__=='__main__':unittest.main()
