@@ -71,11 +71,11 @@ class CloudflareMonitorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             directory = Path(directory); directory.chmod(0o700)
             state = directory / 'cloudflare-state.json'; release = directory / 'release.json'
-            release.write_text(json.dumps({'contentRelease': 'a'*64}))
+            release.write_text(json.dumps({'contentRelease': 'a'*64, 'pages': 51}))
             observation = {'observedAt': 1000, 'startedAt': 999, 'ok': True, 'probes': []}
             with patch.object(self.m, 'service_token', side_effect=AssertionError('must not read a key')), patch.object(self.m, 'observe', return_value=observation) as observe, patch.object(self.m.time, 'time', return_value=1000), contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(self.m.main(['--target', 'cloudflare', '--state', str(state), '--release-file', str(release)]), 0)
-            observe.assert_called_once_with('a'*64, None)
+            observe.assert_called_once_with('a'*64, None, expected_pages=51)
             self.assertEqual(json.loads(state.read_text())['origin'], CF)
 
     def test_all_four_public_probe_contracts_use_no_credential(self):
