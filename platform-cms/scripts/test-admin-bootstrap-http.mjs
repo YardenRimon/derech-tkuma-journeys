@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-const origin='http://127.0.0.1:5174';
+const origin=process.env.CMS_HTTP_TEST_ORIGIN??'http://127.0.0.1:5174';
+assert.match(origin,/^http:\/\/127\.0\.0\.1:\d+$/,'HTTP tests must stay on isolated loopback');
 async function login(handle=''){const r=await fetch(origin+'/signin-with-chatgpt?return_to=%2Fadmin'+(handle?'&test_user='+handle:''),{redirect:'manual'});assert.equal(r.status,302);return r.headers.get('set-cookie').split(';')[0];}
 const get=(path,cookie,headers={})=>fetch(origin+path,{headers:{cookie,...headers}});
 const owner=await login();let response=await get('/api/users',owner);assert.equal(response.status,200);const {users}=await response.json();

@@ -63,6 +63,8 @@ added.href='https://wa.me/535955166';observerCallback([{type:'attributes',target
 installed.dispose();assert.equal(disconnected,true);assert.equal(installed.status().canDispatch,false);
 
 const pages=JSON.parse(gunzipSync(readFileSync(new URL('../source-pages/generated-review-pages.json.gz',import.meta.url))));
+const release=JSON.parse(readFileSync(new URL('../lib/site-release.json',import.meta.url))),provenance=JSON.parse(readFileSync(new URL('../source-pages/provenance.json',import.meta.url)));
+const expectedPages=provenance.snapshotId==='wordpress-public-20261028'?51:37;assert.equal(release.pages,expectedPages);assert.equal(provenance.logicalPageCount,expectedPages);
 let count=0;
 for(const [route,page] of Object.entries(pages)){
  const html=page.shellPrefix+page.sections.map(section=>section.html).join('')+page.shellSuffix;
@@ -77,10 +79,10 @@ for(const [route,page] of Object.entries(pages)){
   const normalized=normalizeWhatsAppHref(match[1]);assert.ok(normalized.startsWith('https://wa.me/'+APPROVED_WHATSAPP),route);count++;
  }
 }
-assert.equal(Object.keys(pages).length,37);assert.ok(count>=189,'exercise all captured phone links');
+assert.equal(Object.keys(pages).length,expectedPages);assert.ok(count>=189,'exercise all captured phone links');
 // Vite copies this public module verbatim into the Cloudflare client artifact.
 // Root can run this same test after its full build with --artifact to verify packaging.
 if(process.argv.includes('--artifact'))assert.deepEqual(readFileSync(new URL('../dist/client/visitor-policy.js',import.meta.url)),readFileSync(new URL('../public/visitor-policy.js',import.meta.url)));
 const source=readFileSync(new URL('../public/visitor-policy.js',import.meta.url),'utf8');
 assert.doesNotMatch(source,/\b(?:fetch|XMLHttpRequest|sendBeacon|dataLayer|gtag|fbq|localStorage|sessionStorage)\b/,'no provider, network or persistence implementation');
-console.log(`PASS visitor policy: deny-default review/config/consent, revocation and PII rejection; exact WhatsApp normalization for ${count} source anchors across 37 pages; preserved CTA text, dynamic links and guard navigation block; local module injection/order; zero external calls${process.argv.includes('--artifact')?'; exact Cloudflare artifact bytes':''}.`);
+console.log(`PASS visitor policy: deny-default review/config/consent, revocation and PII rejection; exact WhatsApp normalization for ${count} source anchors across ${expectedPages} pages; preserved CTA text, dynamic links and guard navigation block; local module injection/order; zero external calls${process.argv.includes('--artifact')?'; exact Cloudflare artifact bytes':''}.`);

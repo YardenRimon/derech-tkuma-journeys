@@ -17,7 +17,16 @@ assert.deepEqual(await contacts.submit(scope,input),receipt);assert.equal(sqlite
 assert(!JSON.stringify(receipt).includes(input.email));assert(!JSON.stringify(receipt).includes(input.phone));assert(!JSON.stringify(receipt).includes(input.fullName));
 await assert.rejects(contacts.submit(scope,{...input,fullName:'שינוי אחר'}),e=>e instanceof ContactError&&e.status===409);
 for(const bad of [{tenantId:'other'},{siteId:'other'},{postId:'999'},{webhook:'https://evil.test'}, {consent:{contact:false,policyVersion:'source-2026-10-19'}},{consent:{contact:true,policyVersion:'old'}},{honeypot:'bot'},{email:'broken'},{phone:'123'}, {idempotencyKey:'guessable'}, {fullName:'x\nInjected'}])assert.throws(()=>validateContact({...input,...bad}));
-for(const id of ['1b8a2d8','c5cb8a0','aa2b8e0'])assert.throws(()=>validateContact({...input,formId:id}),e=>e.status===503&&e.code==='form_contract_pending');
+for(const id of ['c5cb8a0','aa2b8e0'])assert.throws(()=>validateContact({...input,formId:id}),e=>e.status===503&&e.code==='form_contract_pending');
+const footer={...input,idempotencyKey:crypto.randomUUID(),formId:'1b8a2d8',message:'  שורה ראשונה\r\nשורה שנייה  '};
+const footerReceipt=await contacts.submit(scope,footer),footerRow=await store.get(scope,footer.idempotencyKey);
+assert.equal(footerRow.source.postId,'1489');assert.equal(footerRow.fields.message,'שורה ראשונה\nשורה שנייה');assert.ok(!JSON.stringify(footerReceipt).includes('שורה'));
+await assert.rejects(contacts.submit(scope,{...footer,message:'תוכן אחר'}),e=>e.status===409,'message is part of idempotency fingerprint');
+assert.equal(validateContact({...footer,message:undefined}).message,'');assert.equal(validateContact({...footer,message:''}).message,'');
+for(const message of ['x'.repeat(2001),'bad\u0000value',123])assert.throws(()=>validateContact({...footer,message}));
+assert.throws(()=>validateContact({...input,message:'not a source home field'}));
+await contacts.erase(scope,footer.idempotencyKey,1,'requested');assert.ok(!JSON.stringify(await store.get(scope,footer.idempotencyKey)).includes('שורה'));
+await assert.rejects(contacts.submit(scope,footer),e=>e.status===410);
 assert.equal(await store.get({...scope,tenantId:'other'},key),null);assert.equal(await store.get({...scope,siteId:'other'},key),null);
 const raceKey='9bfec518-eeb4-4488-97ce-df05489a6268';
 const parallel=await Promise.all([contacts.submit(scope,{...input,idempotencyKey:raceKey}),contacts.submit(scope,{...input,idempotencyKey:raceKey})]);assert.deepEqual(parallel[0],parallel[1]);

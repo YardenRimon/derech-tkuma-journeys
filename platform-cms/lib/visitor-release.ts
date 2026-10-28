@@ -1,19 +1,34 @@
 import release from './site-release.json';
 import sourceManifest from '../source-manifest.json';
-import {validateProductionProfile,productionOrigin,productionAlias} from '../../production/release-profile.mjs';
+import sourceIndexing from '../source-pages/source-indexing.json';
+import {createHash} from 'node:crypto';
+import {validateProductionProfile,productionOrigin,productionAlias,canonicalProductionProfile} from '../../production/release-profile.mjs';
 declare const __DERECH_PRODUCTION_BUILD__:boolean;
 declare const __DERECH_PRODUCTION_PROFILE__:unknown;
 export type ProductionMeasurement={verified:true;strategy:'gtm';revision:string;containerSha256:string;ga4Id:'G-DV3E8J77EX';gtmId:'GTM-5N7NPTL4';metaPixelId:'766863783155971';basicConsentOnly:true;purposeTagsVerified:true;enhancedMeasurementDisabled:true;noCustomHtml:true;sandboxAccepted:true;noPersonalDataVariables:true};
 export type ProductionPaymentEvidence={provider:'grow';environment:'production';currency:'ILS';acceptanceHash:string;currencyEvidenceHash:string;acknowledgmentEvidenceHash:string;termsHash:string;callbackVerification:'stored-process-token-and-approved-readback/v1';acknowledgmentContract:'full-documented-form/v1'};
 export type ProductionProfile={schema:1;stage:'production';origin:string;aliasOrigin:string;sourceRelease:string;sourceCommit:string;approvalReceiptHash:string;gates:Record<string,true>;resources:{accountId:string;databaseId:string;databaseName:string;bucketName:string};contactReady:boolean;paymentsReady:boolean;paymentEvidence:ProductionPaymentEvidence|null;measurement:ProductionMeasurement|null};
 export function productionRelease(url:URL):ProductionProfile|null{
+ if(!sourceIndexingValid)return null;
  if(typeof __DERECH_PRODUCTION_BUILD__==='undefined'||__DERECH_PRODUCTION_BUILD__!==true||typeof __DERECH_PRODUCTION_PROFILE__==='undefined')return null;
  if(![productionOrigin,productionAlias].includes(url.origin))return null;
  try{return validateProductionProfile(__DERECH_PRODUCTION_PROFILE__,release.contentRelease) as ProductionProfile;}catch{return null;}
 }
 export const publicProductionPaths=new Set(Object.keys(sourceManifest));
-export const sourceNoindexPaths=new Set(['/refund_returns/','/מדיניות-פרטיות/','/תקנון-אתר/','/thanks/']);
-export function productionIndexablePath(path:string){try{return productionPublicPath(path)&&!sourceNoindexPaths.has(decodeURIComponent(path));}catch{return false;}}
+type IndexingPolicy={version:number;origin:string;snapshotId:string;capturedAt:string;routeCount:number;provenanceSha256:string;sourceManifestCanonicalSha256:string;expectedSitemapCount:number;policySha256:string;pages:Record<string,{fixture:string;sourceSha256:string;noindex:boolean;robots:{name:string;content:string}[]}>;noindexPaths:string[]};
+const indexing=sourceIndexing as unknown as IndexingPolicy;
+function validateSourceIndexing(){try{
+ const hash=(value:unknown)=>createHash('sha256').update(canonicalProductionProfile(value)).digest('hex');
+ const supported:Record<number,{snapshot:string;date:string;noindex:number;sitemap:number}>={37:{snapshot:'source-20261019',date:'2026-10-19',noindex:4,sitemap:32},51:{snapshot:'wordpress-public-20261028',date:'2026-10-28',noindex:18,sitemap:32}},expected=supported[indexing.routeCount];
+ const {policySha256,...payload}=indexing,paths=Object.keys(sourceManifest).sort();
+ if(!expected||indexing.version!==1||indexing.origin!==productionOrigin||indexing.snapshotId!==expected.snapshot||!indexing.capturedAt.startsWith(expected.date)||indexing.routeCount!==paths.length||indexing.expectedSitemapCount!==expected.sitemap||!/^[a-f0-9]{64}$/.test(indexing.provenanceSha256)||hash(payload)!==policySha256||hash(sourceManifest)!==indexing.sourceManifestCanonicalSha256||JSON.stringify(Object.keys(indexing.pages).sort())!==JSON.stringify(paths))return false;
+ const derived:string[]=[];
+ for(const path of paths){const page=indexing.pages[path],source=sourceManifest[path as keyof typeof sourceManifest];if(!page||page.fixture!==source.fixture||page.sourceSha256!==source.sourceSha256||!Array.isArray(page.robots)||page.robots.some(tag=>!['robots','googlebot','bingbot'].includes(tag.name)||typeof tag.content!=='string'))return false;const noindex=page.robots.some(tag=>/(?:^|[\s,:;])(?:noindex|none)(?:$|[\s,;])/i.test(tag.content));if(page.noindex!==noindex)return false;if(noindex)derived.push(path);}
+ return derived.length===expected.noindex&&JSON.stringify(derived)===JSON.stringify(indexing.noindexPaths);
+ }catch{return false;}}
+export const sourceIndexingValid=validateSourceIndexing();
+export const sourceNoindexPaths=new Set(sourceIndexingValid?indexing.noindexPaths:Object.keys(sourceManifest));
+export function productionIndexablePath(path:string){try{return sourceIndexingValid&&productionPublicPath(path)&&!sourceNoindexPaths.has(decodeURIComponent(path));}catch{return false;}}
 export function productionPublicPath(path:string){try{return publicProductionPaths.has(decodeURIComponent(path));}catch{return false;}}
 const reviewPolicy="default-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.youtube.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' data: blob:; connect-src 'self'; frame-src https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com; form-action 'none'; base-uri 'self'";
 export const exactReviewProtection='<meta name="robots" content="noindex,nofollow,noarchive" data-pilot-policy="current-source-review"><meta name="referrer" content="strict-origin-when-cross-origin"><meta http-equiv="Content-Security-Policy" content="'+reviewPolicy.replaceAll("'",'&#x27;')+'"><script src="/__pilot__/guard.js" data-pilot-policy="guard-first"></script>';

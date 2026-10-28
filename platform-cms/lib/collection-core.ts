@@ -5,9 +5,9 @@ export type Actor = { id: string; canPublish: boolean };
 export type Tour = { title: string; slug: string; sourcePath?: string; description: string; image: string; imageAlt: string };
 export type Occurrence = { tourId: string; title?: string; date: string; dateLabel: string; startsAt: string|null; endsAt: string|null; timezone: string; meetingPoint: string; priceMinor: number; currency: "ILS"; capacity: number|null; note?: string };
 export type Content = Tour | Occurrence;
-export type Record = Scope & { id: string; kind: Kind; revision: number; draft: Content | null; published: Content | null; publishedVersion: number; updatedAt: string; updatedBy: string };
+export type Record = Scope & { id: string; kind: Kind; revision: number; draft: Content | null; published: Content | null; publishedVersion: number; sourceRefreshHash?: string; updatedAt: string; updatedBy: string };
 export type Change = { operation: "save" | "delete" | "publish" | "restore"; expectedRevision: number; content?: unknown; version?: number };
-export type Snapshot = { version: number; operation: Change["operation"]; record: Record; actorId: string; at: string };
+export type Snapshot = { version: number; operation: Change["operation"] | "source_refresh"; sourceRefresh?: {snapshotId:string;sourceHash:string;changedFields:string[];preservedDraft:boolean;conflicts:{field:string;previousSource:unknown;published:unknown;nextSource:unknown}[]}; record: Record; actorId: string; at: string };
 export class CollectionError extends Error {
   status: number;
   constructor(status: number, message: string) { super(message); this.status = status; }

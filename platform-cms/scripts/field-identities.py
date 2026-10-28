@@ -188,3 +188,87 @@ def seed_registry(pages, source_hashes, generated_pages_sha256):
             "active": active, "retired": [],
         }
     return validate_registry(registry)
+
+
+def review_anchored_migration(slug, candidates, previous_anchors, anchors, registry, *, source_sha256):
+    """Pure, explicit source migration; no positional or fuzzy duplicate binding.
+
+    Anchors come from independently reconstructed old/new DOMs. The caller must
+    prove the old candidates equal the registry before associating their IDs.
+    Unique type+anchor pairs may preserve identity across changed source content.
+    Repeated anchors are never disambiguated by ordinal position. Otherwise the
+    existing unique-content rule applies; ambiguous identities retire intact.
+    """
+    validate_registry(registry)
+    supplied = [_candidate(item) for item in candidates]
+    old_page = registry["pages"].get(slug)
+    old = old_page["active"] if old_page else []
+    if not isinstance(previous_anchors, list) or len(previous_anchors) != len(old):
+        raise ValueError("previous anchors do not cover existing identities")
+    if not isinstance(anchors, list) or len(anchors) != len(supplied):
+        raise ValueError("new anchors do not cover candidates")
+    if not SHA_PATTERN.fullmatch(source_sha256):
+        raise ValueError("migration requires exact source SHA")
+    for values in (previous_anchors, anchors):
+        if any(value is not None and (not isinstance(value, str) or not value or len(value) > 8192) for value in values):
+            raise ValueError("invalid DOM anchor")
+    previous_keys = [(entry["type"], anchor) if anchor else None for entry, anchor in zip(old, previous_anchors)]
+    keys = [(entry["type"], anchor) if anchor else None for entry, anchor in zip(supplied, anchors)]
+    old_counts, new_counts = Counter(previous_keys), Counter(keys)
+    unique_old = {key: index for index, key in enumerate(previous_keys) if key is not None and old_counts[key] == 1}
+    old_fps = Counter(_fingerprint(entry) for entry in old)
+    new_fps = Counter(_fingerprint(entry) for entry in supplied)
+    unique_content = {_fingerprint(entry): index for index, entry in enumerate(old) if old_fps[_fingerprint(entry)] == 1}
+    # Reserve every unambiguous structural binding first, so a content fallback
+    # can never steal an ID from its demonstrated surviving DOM node.
+    bindings = {index: unique_old[key] for index, key in enumerate(keys)
+                if key in unique_old and new_counts[key] == 1}
+    used = set(bindings.values())
+    reasons = {index: "anchor" for index in bindings}
+    for index, entry in enumerate(supplied):
+        if index in bindings:
+            continue
+        fingerprint = _fingerprint(entry)
+        old_index = unique_content.get(fingerprint)
+        # An ambiguous structural anchor is not evidence for assigning a new
+        # value to an old occurrence; exact unique content can still move.
+        if old_index is not None and old_index not in used and new_fps[fingerprint] == 1:
+            bindings[index] = old_index
+            used.add(old_index)
+            reasons[index] = "unique_content"
+    updated = deepcopy(registry)
+    page = updated["pages"].setdefault(slug, {"sourceTemplateSha256": None,
+        "candidateSequenceSha256": candidate_sequence_sha256([]), "nextNumber": 1, "active": [], "retired": []})
+    ids, mapped = [], []
+    for index, entry in enumerate(supplied):
+        if index in bindings:
+            previous = old[bindings[index]]
+            field_id = previous["id"]
+            mapped.append({"id": field_id, "previousCandidateIndex": bindings[index], "candidateIndex": index, "reason": reasons[index],
+                           "anchorSha256": hashlib.sha256(anchors[index].encode()).hexdigest() if reasons[index] == "anchor" else None,
+                           "contentChanged": _fingerprint(previous) != _fingerprint(entry)})
+        else:
+            field_id = entry["type"] + "-" + str(page["nextNumber"])
+            page["nextNumber"] += 1
+        ids.append(field_id)
+    retained = set(ids)
+    removed, ambiguous = [], []
+    for index, entry in enumerate(old):
+        if entry["id"] in retained:
+            continue
+        key, fp = previous_keys[index], _fingerprint(entry)
+        target = ambiguous if ((key is not None and key in keys and (old_counts[key] != 1 or new_counts[key] != 1))
+                               or (new_fps[fp] and (old_fps[fp] != 1 or new_fps[fp] != 1))) else removed
+        target.append(entry["id"])
+    page["retired"].extend(deepcopy(entry) for entry in old if entry["id"] not in retained)
+    page["active"] = [{"id": field_id, **entry} for field_id, entry in zip(ids, supplied)]
+    page["candidateSequenceSha256"] = candidate_sequence_sha256(supplied)
+    page["sourceTemplateSha256"] = source_sha256
+    _page(slug, page)
+    report = {"route": slug, "previousTemplateSha256": old_page.get("sourceTemplateSha256") if old_page else None,
+              "sourceTemplateSha256": source_sha256, "bindings": mapped,
+              "ambiguousIds": ambiguous, "removedIds": removed,
+              "newIds": [field_id for field_id in ids if field_id not in {entry["id"] for entry in old}],
+              "previousCandidateSha256": candidate_sequence_sha256(old),
+              "candidateSha256": candidate_sequence_sha256(supplied)}
+    return ids, {entry["id"]: entry["value"] for entry in page["retired"]}, updated, report

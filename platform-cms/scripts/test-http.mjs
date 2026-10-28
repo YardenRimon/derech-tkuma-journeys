@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-const origin='http://127.0.0.1:5174';let cookie='';
+const origin=process.env.CMS_HTTP_TEST_ORIGIN??'http://127.0.0.1:5174';let cookie='';
+assert.match(origin,/^http:\/\/127\.0\.0\.1:\d+$/,'HTTP tests must stay on isolated loopback');
 const req=(path,options={})=>fetch(origin+path,{...options,headers:{...(cookie?{cookie}:{}),...options.headers}});
 async function json(path,body,expected=200){const r=await req(path,body?{method:'POST',headers:{origin,'content-type':'application/json'},body:JSON.stringify(body)}:{});const data=await r.json();assert.equal(r.status,expected,JSON.stringify(data));return data;}
 assert.equal((await req('/api/cms/page?slug=/')).status,401);
@@ -9,12 +10,13 @@ assert.equal((await req('/api/collections/tour')).status,401);
 const signin=await req('/signin-with-chatgpt?return_to=%2Fadmin',{redirect:'manual'});assert.equal(signin.status,302);cookie=signin.headers.get('set-cookie').split(';')[0];
 for(const path of ['/admin','/admin/collections','/admin/users'])assert.equal((await req(path)).status,200);
 const pages=JSON.parse(readFileSync(new URL('../lib/generated-pages.json',import.meta.url)));
+const release=JSON.parse(readFileSync(new URL('../lib/site-release.json',import.meta.url)));assert.ok([37,51].includes(release.pages),'only accepted source inventories');assert.equal(Object.keys(pages).length,release.pages);
 const visuals=JSON.parse(readFileSync(new URL('../lib/visual-resource-map.json',import.meta.url)));
 const localize=html=>{html=html.replace(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi,(whole,attrs,body)=>{if(body.includes('class RocketLazyLoadScripts'))return '<!-- review: native script loading replaces the source cache replay loader -->';if(!/\btype="text\/rocketlazyloadscript"/.test(attrs)){if(!/\btype="module"/.test(attrs)&&/\bsrc\s*=\s*["']\/(?!\/)/i.test(attrs))return '<script'+attrs.replace(/\s+(?:defer|async)(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+))?/gi,'')+'>'+body+'</script>';return whole;}const module=/\bdata-rocket-type="module"/.test(attrs);let next=attrs.replace(/\s*type="text\/rocketlazyloadscript"/,'').replace(/\s*data-rocket-type="[^"]*"/,'').replace(/\bdata-rocket-src=/,'src=').replace(/\s+data-rocket-defer\b/g,'');if(!module&&/\bsrc\s*=\s*["']\/(?!\/)/i.test(next))next=next.replace(/\s+(?:defer|async)(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+))?/gi,'');return '<script'+next+(module?' type="module"':'')+'>'+body+'</script>';});for(const[url,path]of Object.entries(visuals)){const local=encodeURI(path);html=html.split(url).join(local).split(url.replaceAll('/','\\/')).join(local.replaceAll('/','\\/'));}return html;};
 const visitorScript='<script type="module" src="/visitor-policy.js" data-visitor-policy="review"></script>';
 const visitorResponse=await req('/visitor-policy.js');assert.equal(visitorResponse.status,200);assert.match(visitorResponse.headers.get('content-type'),/javascript/);assert.equal(await visitorResponse.text(),readFileSync(new URL('../public/visitor-policy.js',import.meta.url),'utf8'));
 for(const slug of Object.keys(pages)){const page=await json(`/api/cms/page?slug=${encodeURIComponent(slug)}`);assert.equal(page.slug,slug);const response=await req(encodeURI(slug));assert.equal(response.status,200);assert.match(response.headers.get('x-robots-tag'),/noindex/);const html=await response.text();assert.match(html,/<meta name="robots" content="noindex/);assert.equal(html.split(visitorScript).length-1,1,'Exactly one local policy module per page');assert.ok(!html.includes('data-native-contact='),'Review must not include native intake');assert.ok(html.replace(visitorScript,'')===localize(pages[slug].shellPrefix+pages[slug].sections.map(x=>x.html).join('')+pages[slug].shellSuffix),'Source bytes changed outside the exact policy module at '+slug);}
-const health=await json('/api/health');assert.equal(health.status,'ready');assert.equal(health.pages,37);assert.equal(health.mode,'review');
+const health=await json('/api/health');assert.equal(health.status,'ready');assert.equal(health.pages,release.pages);assert.equal(health.mode,'review');
 assert.equal((await req('/not-a-real-migration-page/')).status,404);
 assert.match(await(await req('/sitemap.xml')).text(),/www.sitemaps.org/);
 let page=await json('/api/cms/page?slug=/');const baseline=structuredClone(page.draft);let revision=page.revision;
@@ -38,4 +40,4 @@ published=await json('/api/public/collections/tour');assert.ok(published.records
 record=(await json('/api/collections/tour',{id:tourId,operation:'delete',expectedRevision:record.revision})).record;
 await json('/api/collections/tour',{id:tourId,operation:'publish',expectedRevision:record.revision});published=await json('/api/public/collections/tour');assert.ok(!published.records.some(x=>x.id===tourId));
 assert.equal((await json(`/api/collections/tour?id=${tourId}&history=1`)).history.length,4);
-console.log('PASS loopback HTTP: anonymous/spoofed-header denial, protected UI, 37 exact localized source pages+noindex, health/sitemap/404, draft isolation, save conflict, publish/rollback, CSRF denial, R2 upload/readback, collection lifecycle and public projection. Local page content restored.');
+console.log(`PASS loopback HTTP: anonymous/spoofed-header denial, protected UI, ${release.pages} exact localized source pages+noindex, health/sitemap/404, draft isolation, save conflict, publish/rollback, CSRF denial, R2 upload/readback, collection lifecycle and public projection. Local page content restored.`);

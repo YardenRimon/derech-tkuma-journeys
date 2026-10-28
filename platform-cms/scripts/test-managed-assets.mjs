@@ -15,6 +15,7 @@ const assets = [
   { name: 'admin.css', contentType: 'text/css; charset=utf-8' },
   { name: 'admin.js', contentType: 'text/javascript; charset=utf-8' },
   { name: 'editor.js', contentType: 'text/javascript; charset=utf-8' },
+  { name: 'collections.js', contentType: 'text/javascript; charset=utf-8' },
 ].map(asset => ({ ...asset, bytes: readFileSync(join(root, 'managed-assets', asset.name)) }));
 
 const identityFixture = `
@@ -35,8 +36,9 @@ const entry = `
 import * as css from './app/admin/runtime/admin.css/route.ts';
 import * as admin from './app/admin/runtime/admin.js/route.ts';
 import * as editor from './app/admin/runtime/editor.js/route.ts';
+import * as collections from './app/admin/runtime/collections.js/route.ts';
 import {setFixtureMode,permissionChecks} from '@/lib/access';
-const routes={'/admin/runtime/admin.css':css,'/admin/runtime/admin.js':admin,'/admin/runtime/editor.js':editor};
+const routes={'/admin/runtime/admin.css':css,'/admin/runtime/admin.js':admin,'/admin/runtime/editor.js':editor,'/admin/runtime/collections.js':collections};
 export default{async fetch(request){
  const url=new URL(request.url),route=routes[url.pathname];
  if(!route)return new Response('Not found',{status:404});
@@ -100,7 +102,7 @@ try {
     assert.deepEqual(Buffer.from(await allowed.arrayBuffer()), asset.bytes, 'authorized route must return exact managed asset bytes: ' + asset.name);
   }
   assert.equal(outboundCalls, 0, 'managed asset requests must not contact external services');
-  console.log('PASS actual workerd managed assets: all three real routes return exact authorized CSS/JS bytes with correct type/no-store/noindex/nosniff; anonymous/forbidden/unexpected failures deny without asset or private-error leakage; content authorization always runs; zero external calls.');
+  console.log('PASS actual workerd managed assets: all four real routes return exact authorized CSS/JS bytes with correct type/no-store/noindex/nosniff; anonymous/forbidden/unexpected failures deny without asset or private-error leakage; content authorization always runs; zero external calls.');
 } finally {
   await runtime?.dispose();
   rmSync(temporary, { recursive: true, force: true });

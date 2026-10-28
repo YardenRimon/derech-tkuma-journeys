@@ -11,12 +11,19 @@ const scriptBlocks=html=>[...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script
 const tracking=/googletagmanager|google-analytics|google-analytics-for-wordpress|monsterinsights|__gtagTracker|GoogleAnalyticsObject|\bgtag\s*\(|\bfbq\s*\(|fbevents|hotjar|clarity\.ms|maspik-signals|pixel\./i;
 const payment=/meshulam[_-]payment|configureGrowSdk|\bGrowSDK\b|grow-sdk|grow\.payments/i;
 const canonical=html=>[...html.matchAll(/<link\b[^>]*>/gi)].filter(m=>/\brel\s*=\s*["']canonical["']/i.test(m[0])).map(m=>m[0]);
-assert.equal(Object.keys(pages).length,37,'all current logical routes must be present');
-assert.equal(provenance.capturedHtmlCount,38);assert.equal(provenance.aliases.length,1);assert.equal(provenance.logicalPageCount,37);
+const snapshotId=provenance.snapshotId??'source-20261019';
+const snapshots={'source-20261019':{date:'2026-10-19',pages:37,captures:38,aliases:1},'wordpress-public-20261028':{date:'2026-10-28',pages:51,captures:51,aliases:0}};
+const snapshot=snapshots[snapshotId];assert.ok(snapshot,'explicit supported source snapshot required');assert.ok(provenance.capturedAt.startsWith(snapshot.date));
+assert.equal(Object.keys(pages).length,snapshot.pages,'all pinned logical routes must be present');
+assert.equal(provenance.capturedHtmlCount,snapshot.captures);assert.equal(provenance.aliases.length,snapshot.aliases);assert.equal(provenance.logicalPageCount,snapshot.pages);
+let assetMap=null;
+if(provenance.assetMap){const bytes=readFileSync(new URL('../source-pages/'+provenance.assetMap.file,import.meta.url));assert.equal(sha(bytes),provenance.assetMap.sha256);assetMap=JSON.parse(bytes);assert.equal(assetMap.snapshotId,snapshotId);assert.equal(sha(readFileSync(new URL('../source-snapshot-assets-manifest.json',import.meta.url))),assetMap.manifestSha256);}
+const expectedAsset=value=>{const escaped=value.includes('\\/'),raw=value.replaceAll('\\/','/'),url=new URL(raw,'https://derech-tkuma.com');assert.ok(['https://derech-tkuma.com','https://www.derech-tkuma.com','https://cdnjs.cloudflare.com','https://cdn.trustindex.io'].includes(url.origin));const path=decodeURIComponent(url.pathname).replace(/^\//,'');const key=['cdnjs.cloudflare.com','cdn.trustindex.io'].includes(url.hostname)?'_external/'+url.hostname+'/'+path:path;assert.ok(assetMap&&Object.hasOwn(assetMap.paths,key),'only exact pinned asset-map paths may change');const encoded=assetMap.paths[key].split('/').map(segment=>encodeURIComponent(segment).replace(/[!'()*]/g,c=>'%'+c.charCodeAt(0).toString(16).toUpperCase()).replace(/%40/g,'@')).join('/');const output=encoded+url.search+url.hash;return escaped?output.replaceAll('/','\\/'):output;};
+if(snapshotId==='wordpress-public-20261028')assert.deepEqual(provenance.redirects,[{route:'/checkout/',status:302,location:'https://derech-tkuma.com/cart/'}]);
 assert.deepEqual(Object.keys(pages).sort(),Object.keys(provenance.pages).sort());assert.deepEqual(Object.keys(pages).sort(),Object.keys(manifest).sort());
 const inventoryUrl=new URL('../../migration/source-2026-10-19/inventory.json',import.meta.url);
 let inventory;
-if(existsSync(inventoryUrl)){
+if(snapshotId==='source-20261019'&&existsSync(inventoryUrl)){
  inventory=JSON.parse(readFileSync(inventoryUrl));
  const routes=[...new Set(inventory.pages.map(x=>x.route==='/'?'/':x.route.replace(/\/+$/,'')+'/'))].sort();
  assert.deepEqual(Object.keys(pages).sort(),routes,'current capture inventory logical coverage');
@@ -30,10 +37,11 @@ for(const [slug,page]of Object.entries(pages)){
  for(const patch of record.patches){
   assert.ok(patch.start>=cursor&&patch.end>=patch.start,slug+' non-overlapping source offsets');const before=chars.slice(patch.start,patch.end).join('');assert.equal(sha(before),patch.beforeSha256);
   if(patch.kind==='own-site-url'){const following=chars.slice(patch.end,patch.end+2).join('');assert.equal(patch.replacement+following,localize(before+following),'only own-site origins may change');}
+  else if(patch.kind==='snapshot-asset-url'){assert.ok(assetMap);assert.equal(patch.replacement,expectedAsset(before),'exact independent snapshot URL substitution');}
   else if(patch.kind==='review-protection'){
    assert.equal(patch.start,patch.end);assert.match(patch.replacement,/noindex,nofollow,noarchive/);assert.match(patch.replacement,/form-action &#x27;none&#x27;/);assert.match(patch.replacement,/connect-src &#x27;self&#x27;/);assert.match(patch.replacement,/src="\/__pilot__\/guard\.js"/);
   }else if(patch.kind==='disabled-tracking-script'||patch.kind==='disabled-payment-script'){
-   assert.match(before,/^<script\b[\s\S]*<\/script\s*>$/i);assert.ok((patch.kind==='disabled-payment-script'?payment:tracking).test(before));assert.equal(patch.replacement,`<!-- pilot-disabled-${patch.kind==='disabled-payment-script'?'payment':'tracking'}-script sha256=${sha(before)} -->`);disabledCount++;
+   assert.match(before,/^<script\b[\s\S]*<\/script\s*>$/i);assert.ok((patch.kind==='disabled-payment-script'?payment:(assetMap?/googletagmanager|google-analytics|google-analytics-for-wordpress|monsterinsights|__gtagTracker|GoogleAnalyticsObject|\bgtag\s*\(|\bfbq\s*\(|fbevents|hotjar|clarity\.ms|maspik-signals|pixel\.|sourcebuster|order-attribution|wc_order_attribution/i:tracking)).test(before));assert.equal(patch.replacement,`<!-- pilot-disabled-${patch.kind==='disabled-payment-script'?'payment':'tracking'}-script sha256=${sha(before)} -->`);disabledCount++;
   }else assert.fail('unapproved transformation: '+patch.kind);
   parts.push(chars.slice(cursor,patch.start).join(''),patch.replacement);cursor=patch.end;patchCount++;
  }

@@ -1,4 +1,5 @@
 import { getPublishedPage, CmsError } from '@/lib/cms';
+import {sourcePublicRedirect} from '@/lib/source-redirect';
 import { env } from 'cloudflare:workers';
 import { preparePublicContacts } from '@/lib/contact-client';
 import type { ContactConfig } from '@/lib/contact-core';
@@ -8,7 +9,9 @@ const headers = { 'content-type':'text/html; charset=utf-8','cache-control':'pub
 export async function GET(request: Request) {
   const slug = new URL(request.url).pathname;
   try {
-    const url=new URL(request.url),profile=productionRelease(url),html=await getPublishedPage(slug);
+    const url=new URL(request.url),redirect=sourcePublicRedirect(url.pathname,request.method);
+    if(redirect)return new Response(null,{status:redirect.status,headers:{...headers,'cache-control':'no-store',location:redirect.location}});
+    const profile=productionRelease(url),html=await getPublishedPage(slug);
     if(!profile)return new Response(preparePublicContacts(html,url,env as unknown as ContactConfig),{headers});
     const prepared=prepareProductionPage(html,url,profile),body=profile.contactReady?preparePublicContacts(prepared,url,env as unknown as ContactConfig):prepared;
     const publicHeaders=new Headers(headers);if(productionIndexablePath(url.pathname))publicHeaders.delete('x-robots-tag');publicHeaders.set('content-security-policy',productionCsp);publicHeaders.set('x-derech-public-profile',profile.sourceCommit);

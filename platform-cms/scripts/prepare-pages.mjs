@@ -19,6 +19,7 @@ const payload=gunzipSync(packed,{maxOutputLength:40*1024*1024});
 assert.equal(payload.length,build.payloadBytes);assert.equal(sha(payload),build.payloadSha256,'pinned review payload hash mismatch');
 const pages=JSON.parse(payload.toString('utf8')),routes=Object.keys(pages).sort();
 const identities=json('source-pages/field-identities.json');assert.equal(identities.format,1);
+if(provenance.assetMap){const pin=provenance.assetMap,bytes=readFileSync(file('source-pages/'+pin.file)),map=JSON.parse(bytes);assert.equal(pin.file,'asset-map.json');assert.equal(sha(bytes),pin.sha256,'pinned snapshot asset map mismatch');assert.equal(map.snapshotId,provenance.snapshotId);assert.equal(map.snapshotId,pin.snapshotId);assert.equal(sha(readFileSync(file('source-snapshot-assets-manifest.json'))),map.manifestSha256,'snapshot asset manifest drift');}
 assert.equal(routes.length,build.routeCount);assert.equal(routes.length,provenance.logicalPageCount);
 for(const object of [build.sources,provenance.pages,manifest])assert.deepEqual(routes,Object.keys(object).sort(),'pinned route identity mismatch');
 for(const slug of routes){
@@ -37,6 +38,7 @@ for(const slug of routes){
  const reviewed=html.replace(/ data-(?:edit|image)-id="(?:text|image)-\d+"/g,'');
  assert.equal(sha(reviewed),source.reviewSha256,'generated review page hash mismatch: '+slug);assert.equal(source.reviewSha256,entry.sha256);
 }
-// No output is written until all 36 source identities and review payloads pass.
+const release=json('lib/site-release.json');assert.equal(release.mode,'review');assert.equal(release.pages,routes.length);assert.equal(release.contentRelease,sha(readFileSync(file('source-manifest.json'))));assert.equal(release.capturedAt,provenance.capturedAt);assert.deepEqual(release.redirects??[],provenance.redirects??[],'source redirects changed without release metadata');
+// No output is written until all pinned source identities and review payloads pass.
 mkdirSync(file('lib/'),{recursive:true});writeFileSync(file('lib/generated-pages.json'),payload);
 console.log(JSON.stringify({prepared:true,routes:routes.length,payloadSha256:build.payloadSha256,source:'verified pinned source reconstruction',networkRequests:0,pythonRequired:false}));

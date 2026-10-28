@@ -2,11 +2,11 @@ import { CONTACT_POLICY, contactEnabled, type ContactConfig } from './contact-co
 
 /** Serialized as an early classic script only after the server production gate.
  * Its private fetch reference is captured before the retained review guard.
- * A window capture handler intercepts only the two verified source forms;
+ * A window capture handler intercepts only the three verified source form identities;
  * Elementor and the document guard cannot also submit that same event. */
 function nativeContactClient() {
   if (!['https://derech-tkuma.com', 'https://www.derech-tkuma.com'].includes(location.origin)) return;
-  const nativeFetch = window.fetch.bind(window), allowed: Record<string, string> = { '0899899': '13', af355f0: '18' };
+  const nativeFetch = window.fetch.bind(window), allowed: Record<string, string> = { '0899899': '13', af355f0: '18', '1b8a2d8': '1489' };
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   const attempts = new WeakMap<HTMLFormElement, { key: string; busy: boolean; accepted: boolean }>();
   const field = (form: HTMLFormElement, name: string) => form.elements.namedItem(name) as HTMLInputElement | null;
@@ -27,7 +27,7 @@ function nativeContactClient() {
       if (!uuid.test(key)) { message(form, 'לא ניתן להכין את הפנייה כרגע. נסה שוב מאוחר יותר.', true);return; }
       attempt = { key, busy: false, accepted: false };attempts.set(form, attempt);storage(formId, key);
     }
-    const payload = { idempotencyKey: attempt.key, formId, fullName: field(form, 'form_fields[fullname]')?.value ?? '', phone: field(form, 'form_fields[phone]')?.value ?? '', email: field(form, 'form_fields[email]')?.value ?? '', consent: { contact: field(form, 'form_fields[field_1704896]')?.checked === true, policyVersion: 'source-2026-10-19' }, honeypot: field(form, 'contact_website')?.value ?? '' };
+    const payload = { idempotencyKey: attempt.key, formId, fullName: field(form, 'form_fields[fullname]')?.value ?? '', phone: field(form, 'form_fields[phone]')?.value ?? '', email: field(form, 'form_fields[email]')?.value ?? '', ...(formId === '1b8a2d8' ? { message: field(form, 'form_fields[message]')?.value ?? '' } : {}), consent: { contact: field(form, 'form_fields[field_1704896]')?.checked === true, policyVersion: 'source-2026-10-19' }, honeypot: field(form, 'contact_website')?.value ?? '' };
     const controls = [...form.querySelectorAll<HTMLButtonElement | HTMLInputElement>('button[type="submit"],input[type="submit"]')], disabled = controls.map(control => control.disabled);
     attempt.busy = true;controls.forEach(control => { control.disabled = true; });form.setAttribute('aria-busy', 'true');
     const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15000);
@@ -72,12 +72,12 @@ export function contactClientSource(): string { return '(' + nativeContactClient
  * The exact request URL origin and existing deployment gate must both pass. */
 export function preparePublicContacts(html: string, requestUrl: URL, config: ContactConfig): string {
   try { contactEnabled(config, requestUrl.origin); } catch { return html; }
-  let path: string;try { path = decodeURIComponent(requestUrl.pathname); } catch { return html; }
-  if (!['/', '/המסלולים/'].includes(path) || html.includes('data-native-contact=')) return html;
-  const id = path === '/' ? '0899899' : 'af355f0';
-  if (!html.includes('value="' + id + '"')) return html;
+  if (html.includes('data-native-contact=')) return html;
+  // The verified footer widget is repeated across the source pages. The client
+  // still checks the exact form/post pair before interception.
+  if (!['0899899', 'af355f0', '1b8a2d8'].some(id => html.includes('value="' + id + '"'))) return html;
   // The entire source DOM, copy and original script order remain byte-identical
-  // after removing this one insertion. Unknown/footer/rating/quote forms still
+  // after removing this one insertion. Unknown/rating/quote forms still
   // reach the retained blocking guard and have no native intake handler.
   const script = '<script data-native-contact="' + CONTACT_POLICY + '">' + contactClientSource() + '</script>';
   return html.replace(/<head(?:\s[^>]*)?>/i, head => head + script);

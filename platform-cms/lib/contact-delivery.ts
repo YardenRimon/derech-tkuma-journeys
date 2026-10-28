@@ -1,7 +1,7 @@
 /** Isolated transport for the existing verified Make route. Never invoked by
  * public intake; no dispatch endpoint, timer, sender, fallback or auto-retry. */
 import {Contacts,ContactError,contactHash,CONTACT_FORMS,contactScope,type ContactScope,type ContactRecord,type VerifiedContactRouting} from './contact-core';
-type Field='fullName'|'phone'|'email'|'formId'|'postId'|'consentAt'|'receipt';
+type Field='fullName'|'phone'|'email'|'message'|'formId'|'postId'|'consentAt'|'receipt';
 export type MakeContactContract={
  schema:1;kind:'make';verified:true;scope:ContactScope;formIds:string[];
  endpoint:string;fields:Record<string,Field>;
@@ -9,7 +9,7 @@ export type MakeContactContract={
  acknowledgement:{status:200|201|202;field:string;value:string;receiptField:string};
  timeoutMs:number;
 };
-const fields:Field[]=['fullName','phone','email','formId','postId','consentAt','receipt'];
+const baseFields:Field[]=['fullName','phone','email','formId','postId','consentAt','receipt'];
 const exact=(x:Record<string,unknown>,names:string[])=>Object.keys(x).length===names.length&&names.every(name=>Object.hasOwn(x,name));
 export async function verifiedMakeContract(value:unknown,scope:ContactScope){
  const bad=()=>{throw new ContactError(503,'routing_unverified');};
@@ -18,6 +18,11 @@ export async function verifiedMakeContract(value:unknown,scope:ContactScope){
  const c=value as MakeContactContract;
  if(!exact(c as unknown as Record<string,unknown>,['schema','kind','verified','scope','formIds','endpoint','fields','idempotency','acknowledgement','timeoutMs'])||c.schema!==1||c.kind!=='make'||c.verified!==true||!c.scope||!exact(c.scope,['tenantId','siteId'])||c.scope.tenantId!==scope.tenantId||c.scope.siteId!==scope.siteId)return bad();
  if(!Array.isArray(c.formIds)||!c.formIds.length||new Set(c.formIds).size!==c.formIds.length||c.formIds.some(id=>!Object.hasOwn(CONTACT_FORMS,id)||!CONTACT_FORMS[id as keyof typeof CONTACT_FORMS].sourceActionsVerified))return bad();
+ // Footer has a distinct source webhook and an optional textarea. A route
+ // contract cannot conflate it with the home/routes group or drop its message.
+ const footer=c.formIds.includes('1b8a2d8');
+ if(footer&&c.formIds.length!==1)return bad();
+ const fields:Field[]=footer?[...baseFields,'message']:baseFields;
  let url:URL;try{url=new URL(c.endpoint);}catch{return bad();}
  // Exact server-owned endpoint only; never body/query destinations, redirects,
  // credentials, arbitrary subdomains, IPs, ports or private-network URLs.
@@ -34,7 +39,7 @@ export async function verifiedMakeContract(value:unknown,scope:ContactScope){
 export async function deliverContact(service:Contacts,scope:ContactScope,key:string,revision:number,configuration:unknown,fetcher:typeof fetch=fetch){
  const {contract,routing}=await verifiedMakeContract(configuration,scope);
  const record=await service.claim(scope,key,revision,routing);
- const payload:Record<string,string>={},source:Record<Field,string>={...record.fields,formId:record.source.formId,postId:record.source.postId,consentAt:record.consent.receivedAt,receipt:record.receipt};
+ const payload:Record<string,string>={},source:Record<Field,string>={...record.fields,message:record.fields.message??'',formId:record.source.formId,postId:record.source.postId,consentAt:record.consent.receivedAt,receipt:record.receipt};
  for(const [target,field]of Object.entries(contract.fields))payload[target]=source[field];
  const controller=new AbortController();let timer:ReturnType<typeof setTimeout>|undefined;
  let outcome:'provider_accepted'|'unknown'|'failed'='unknown',receiptHash:string|null=null;

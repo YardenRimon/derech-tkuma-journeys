@@ -2,14 +2,14 @@
 export const CONTACT_POLICY = 'source-2026-10-19';
 export const CONTACT_FORMS = {
  '0899899': { postId:'13', kind:'home', sourceActionsVerified:true },
- '1b8a2d8': { postId:'1489', kind:'footer', sourceActionsVerified:false },
+ '1b8a2d8': { postId:'1489', kind:'footer', sourceActionsVerified:true },
  'af355f0': { postId:'18', kind:'routes', sourceActionsVerified:true },
  'c5cb8a0': { postId:'5133', kind:'rating', sourceActionsVerified:false },
  'aa2b8e0': { postId:'5982', kind:'quote', sourceActionsVerified:false },
 } as const;
 export type ContactScope = {tenantId:string;siteId:string};
-export type ContactInput = {idempotencyKey:string;formId:keyof typeof CONTACT_FORMS;fullName:string;phone:string;email:string;consent:{contact:true;policyVersion:typeof CONTACT_POLICY};honeypot:string};
-export type ContactRecord = {schema:1;scope:ContactScope;key:string;receipt:string;fingerprint:string;source:{formId:string;postId:string};fields:{fullName:string;phone:string;email:string};consent:{contact:true;policyVersion:string;receivedAt:string};createdAt:string;retention?:{days:number;expiresAt:string};revision:number;outbox:{state:'pending_routing'|'sending'|'provider_accepted'|'unknown'|'failed';attemptToken:string|null;contractId:string|null;receiptHash:string|null}};
+export type ContactInput = {idempotencyKey:string;formId:keyof typeof CONTACT_FORMS;fullName:string;phone:string;email:string;message?:string;consent:{contact:true;policyVersion:typeof CONTACT_POLICY};honeypot:string};
+export type ContactRecord = {schema:1;scope:ContactScope;key:string;receipt:string;fingerprint:string;source:{formId:string;postId:string};fields:{fullName:string;phone:string;email:string;message?:string};consent:{contact:true;policyVersion:string;receivedAt:string};createdAt:string;retention?:{days:number;expiresAt:string};revision:number;outbox:{state:'pending_routing'|'sending'|'provider_accepted'|'unknown'|'failed';attemptToken:string|null;contractId:string|null;receiptHash:string|null}};
 export type ContactTombstone={schema:2;scope:ContactScope;key:string;revision:number;erasedAt:string;reason:'expired'|'requested';actorId:string|null};
 export type ContactStored=ContactRecord|ContactTombstone;
 export type ContactDeletionMarker={schema:1;scope:ContactScope;key:string;erasedAt:string;reason:'expired'|'requested'};
@@ -31,13 +31,18 @@ function text(value:unknown,max:number){if(typeof value!=='string'||value.length
 export function validateContact(value:unknown):ContactInput{
  if(!value||typeof value!=='object'||Array.isArray(value))return fail(400,'invalid_submission');
  const x=value as Record<string,unknown>;
- if(Object.keys(x).some(k=>!['idempotencyKey','formId','fullName','phone','email','consent','honeypot'].includes(k)))fail(400,'invalid_submission');
+ if(Object.keys(x).some(k=>!['idempotencyKey','formId','fullName','phone','email','message','consent','honeypot'].includes(k)))fail(400,'invalid_submission');
  if(typeof x.idempotencyKey!=='string'||!uuid.test(x.idempotencyKey))fail(400,'invalid_idempotency_key');
  if(typeof x.formId!=='string'||!Object.hasOwn(CONTACT_FORMS,x.formId))fail(400,'unknown_form');
  const formId=x.formId as keyof typeof CONTACT_FORMS;
- // Footer, rating and quote backend contracts are not yet known. Do not invent
- // lead semantics, signature storage, order amounts or routing for those forms.
+ // Rating and quote are separate source workflows, never contact leads.
  if(!CONTACT_FORMS[formId].sourceActionsVerified)fail(503,'form_contract_pending');
+ if(formId!=='1b8a2d8'&&Object.hasOwn(x,'message'))fail(400,'invalid_submission');
+ let message:string|undefined;
+ if(formId==='1b8a2d8'){
+  if(x.message!==undefined&&(typeof x.message!=='string'||x.message.length>2000||/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(x.message)))fail(400,'invalid_submission');
+  message=typeof x.message==='string'?x.message.normalize('NFC').replace(/\r\n?/g,'\n').trim():'';
+ }
  if(x.honeypot!=='')fail(400,'invalid_submission');
  const c=x.consent as Record<string,unknown>|undefined;
  if(!c||typeof c!=='object'||Array.isArray(c)||Object.keys(c).some(k=>!['contact','policyVersion'].includes(k))||c.contact!==true||c.policyVersion!==CONTACT_POLICY)fail(400,'consent_required');
@@ -46,7 +51,7 @@ export function validateContact(value:unknown):ContactInput{
  if(/^0[2-9]\d{7,8}$/.test(phone))phone='+972'+phone.slice(1);
  if(!/^\+[1-9]\d{7,14}$/.test(phone))fail(400,'invalid_submission');
  const email=text(x.email,254).toLowerCase();if(!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email))fail(400,'invalid_submission');
- return{idempotencyKey:(x.idempotencyKey as string).toLowerCase(),formId,fullName,phone,email,consent:{contact:true,policyVersion:CONTACT_POLICY},honeypot:''};
+ return{idempotencyKey:(x.idempotencyKey as string).toLowerCase(),formId,fullName,phone,email,...(message===undefined?{}:{message}),consent:{contact:true,policyVersion:CONTACT_POLICY},honeypot:''};
 }
 export async function contactHash(value:unknown){const raw=JSON.stringify(value);return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(raw)))).map(x=>x.toString(16).padStart(2,'0')).join('');}
 export type VerifiedContactRouting={kind:'make';verified:true;contractId:string;scope:ContactScope;formIds:string[]};
@@ -93,7 +98,7 @@ export class Contacts{
  async submit(scope:ContactScope,value:unknown,now=new Date(),reserveNew?:()=>Promise<void>){
   contactScope(scope);const input=validateContact(value),source={formId:input.formId,postId:CONTACT_FORMS[input.formId].postId};
   await this.assertUnmarked(scope,input.idempotencyKey);
-  const fields={fullName:input.fullName,phone:input.phone,email:input.email};
+  const fields={fullName:input.fullName,phone:input.phone,email:input.email,...(input.message===undefined?{}:{message:input.message})};
   const fingerprint=await contactHash({scope,source,fields,consent:input.consent});
   const replay=async()=>{
    const previous=await this.live(scope,input.idempotencyKey,now);

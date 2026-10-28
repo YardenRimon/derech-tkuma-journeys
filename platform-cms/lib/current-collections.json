@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "sourceCapturedAt": "2026-10-19T14:23:11.773970+00:00",
+  "sourceCapturedAt": "2026-10-28T15:25:41.865611+00:00",
   "records": [
     {
       "kind": "tour",
@@ -10,13 +10,13 @@
         "slug": "נקודות-החיבור",
         "sourcePath": "/maslulim/נקודות-החיבור/",
         "description": "מסלול תמציתי וממוקד שמביא את הסיפור בשלוש תחנות עוצמתיות",
-        "image": "/wp-content/uploads/2025/09/WhatsApp-Image-2025-09-10-at-09.32.02-1024x566.jpeg",
+        "image": "/__source_assets__/wordpress-public-20261028/wp-content/uploads/2025/09/WhatsApp-Image-2025-09-10-at-09.32.02-1024x566.jpeg",
         "imageAlt": ""
       },
       "provenance": {
-        "sourceUrl": "https://derech-tkuma.com/maslulim/%d7%a0%d7%a7%d7%95%d7%93%d7%95%d7%aa-%d7%94%d7%97%d7%99%d7%91%d7%95%d7%a8/",
-        "sourceHash": "4cf911ecfac8e54e85608806fa7305da43fd25b28182ea0f3e3d5cb48a369f48",
-        "capturedAt": "2026-10-19T14:21:07.930664+00:00",
+        "sourceUrl": "https://derech-tkuma.com/maslulim/%D7%A0%D7%A7%D7%95%D7%93%D7%95%D7%AA-%D7%94%D7%97%D7%99%D7%91%D7%95%D7%A8/",
+        "sourceHash": "81952bcb843c9f70d1d6cbef083abd456f32ba99c59738dd1cb754fa44410f83",
+        "capturedAt": "2026-10-28T15:23:52.797174+00:00",
         "canonical": "https://derech-tkuma.com/maslulim/נקודות-החיבור/"
       },
       "unknownFields": []
@@ -29,13 +29,13 @@
         "slug": "עוז-מול-תופת",
         "sourcePath": "/maslulim/עוז-מול-תופת/",
         "description": "",
-        "image": "/wp-content/uploads/2025/09/untitled-67-1024x567.jpg",
+        "image": "/__source_assets__/wordpress-public-20261028/wp-content/uploads/2025/09/untitled-67-1024x567.jpg",
         "imageAlt": "דרך התקומה סיורים והדרכות בעוטף"
       },
       "provenance": {
-        "sourceUrl": "https://derech-tkuma.com/maslulim/%d7%a2%d7%95%d7%96-%d7%9e%d7%95%d7%9c-%d7%aa%d7%95%d7%a4%d7%aa/",
-        "sourceHash": "4d9f41aefad0669b43b4ea023305d1d3da9a4234c1bf4beb1ceec3cb5184db3c",
-        "capturedAt": "2026-10-19T14:21:09.515997+00:00",
+        "sourceUrl": "https://derech-tkuma.com/maslulim/%D7%A2%D7%95%D7%96-%D7%9E%D7%95%D7%9C-%D7%AA%D7%95%D7%A4%D7%AA/",
+        "sourceHash": "c28838f397aee50689c7d183b62bf2b1ede5983c2889958f454256b6fb25d354",
+        "capturedAt": "2026-10-28T15:23:53.991286+00:00",
         "canonical": "https://derech-tkuma.com/maslulim/עוז-מול-תופת/"
       },
       "unknownFields": []
@@ -48,13 +48,13 @@
         "slug": "קו-המגע",
         "sourcePath": "/maslulim/קו-המגע/",
         "description": "",
-        "image": "/wp-content/uploads/2025/09/DJI_000312.7.25-1-1-1024x575.jpeg",
+        "image": "/__source_assets__/wordpress-public-20261028/wp-content/uploads/2025/09/DJI_000312.7.25-1-1-1024x575.jpeg",
         "imageAlt": ""
       },
       "provenance": {
-        "sourceUrl": "https://derech-tkuma.com/maslulim/%d7%a7%d7%95-%d7%94%d7%9e%d7%92%d7%a2/",
-        "sourceHash": "720ab3adf1875f44a2348b6693ed3a95bf98d9f9d3cf98d472e403af98d3b2b5",
-        "capturedAt": "2026-10-19T14:21:11.050397+00:00",
+        "sourceUrl": "https://derech-tkuma.com/maslulim/%D7%A7%D7%95-%D7%94%D7%9E%D7%92%D7%A2/",
+        "sourceHash": "2bcae6de633f8c48883348cc0db99961de84f7f5a2d4299cb81376fe0993fc78",
+        "capturedAt": "2026-10-28T15:23:55.160472+00:00",
         "canonical": "https://derech-tkuma.com/maslulim/קו-המגע/"
       },
       "unknownFields": []
@@ -71,83 +71,15 @@
         "imageAlt": ""
       },
       "provenance": {
-        "sourceUrl": "https://derech-tkuma.com/%d7%a1%d7%99%d7%95%d7%a8%d7%99%d7%9d/",
-        "sourceHash": "93d6a08c4ff7f96cd3686c15df6dea42496ebd12c64d0da4c8a080e34be3a2ce",
-        "capturedAt": "2026-10-19T14:21:27.949051+00:00",
+        "sourceUrl": "https://derech-tkuma.com/%D7%A1%D7%99%D7%95%D7%A8%D7%99%D7%9D/",
+        "sourceHash": "c3e0373d64325a73b365de25a369ce3e22f1b828d6e0b4adcd5a5b64cd06e260",
+        "capturedAt": "2026-10-28T15:25:33.234091+00:00",
         "canonical": "https://derech-tkuma.com/סיורים/"
       },
       "unknownFields": [
         "image",
         "imageAlt"
       ]
-    },
-    {
-      "kind": "occurrence",
-      "id": "source-product-7844",
-      "content": {
-        "tourId": "open-tour",
-        "title": "סיור בעוטף ביום שישי",
-        "date": "2026-10-16",
-        "dateLabel": "16/10/26",
-        "startsAt": null,
-        "endsAt": null,
-        "timezone": "Asia/Jerusalem",
-        "meetingPoint": "",
-        "priceMinor": 17000,
-        "currency": "ILS",
-        "capacity": null,
-        "note": ""
-      },
-      "provenance": {
-        "sourceUrl": "https://derech-tkuma.com/%d7%a1%d7%99%d7%95%d7%a8%d7%99%d7%9d/",
-        "sourceHash": "93d6a08c4ff7f96cd3686c15df6dea42496ebd12c64d0da4c8a080e34be3a2ce",
-        "capturedAt": "2026-10-19T14:21:27.949051+00:00",
-        "canonical": "https://derech-tkuma.com/סיורים/",
-        "productId": "7844",
-        "dateLiteral": "16/10/26",
-        "priceLiteral": "170.00"
-      },
-      "unknownFields": [
-        "startsAt",
-        "endsAt",
-        "capacity",
-        "meetingPoint"
-      ],
-      "cardSelector": ".e-loop-item-7844"
-    },
-    {
-      "kind": "occurrence",
-      "id": "source-product-7920",
-      "content": {
-        "tourId": "open-tour",
-        "title": "סיור בעוטף ביום ראשון צהריים",
-        "date": "2026-10-18",
-        "dateLabel": "18/10/26",
-        "startsAt": null,
-        "endsAt": null,
-        "timezone": "Asia/Jerusalem",
-        "meetingPoint": "",
-        "priceMinor": 17000,
-        "currency": "ILS",
-        "capacity": null,
-        "note": ""
-      },
-      "provenance": {
-        "sourceUrl": "https://derech-tkuma.com/%d7%a1%d7%99%d7%95%d7%a8%d7%99%d7%9d/",
-        "sourceHash": "93d6a08c4ff7f96cd3686c15df6dea42496ebd12c64d0da4c8a080e34be3a2ce",
-        "capturedAt": "2026-10-19T14:21:27.949051+00:00",
-        "canonical": "https://derech-tkuma.com/סיורים/",
-        "productId": "7920",
-        "dateLiteral": "18/10/26",
-        "priceLiteral": "170.00"
-      },
-      "unknownFields": [
-        "startsAt",
-        "endsAt",
-        "capacity",
-        "meetingPoint"
-      ],
-      "cardSelector": ".e-loop-item-7920"
     },
     {
       "kind": "occurrence",
@@ -167,9 +99,9 @@
         "note": "סיור כולל הסעה - איסוף והחזרה מרכבת שדרות"
       },
       "provenance": {
-        "sourceUrl": "https://derech-tkuma.com/%d7%a1%d7%99%d7%95%d7%a8%d7%99%d7%9d/",
-        "sourceHash": "93d6a08c4ff7f96cd3686c15df6dea42496ebd12c64d0da4c8a080e34be3a2ce",
-        "capturedAt": "2026-10-19T14:21:27.949051+00:00",
+        "sourceUrl": "https://derech-tkuma.com/%D7%A1%D7%99%D7%95%D7%A8%D7%99%D7%9D/",
+        "sourceHash": "c3e0373d64325a73b365de25a369ce3e22f1b828d6e0b4adcd5a5b64cd06e260",
+        "capturedAt": "2026-10-28T15:25:33.234091+00:00",
         "canonical": "https://derech-tkuma.com/סיורים/",
         "productId": "7681",
         "dateLiteral": "20/10/26",
@@ -201,9 +133,9 @@
         "note": ""
       },
       "provenance": {
-        "sourceUrl": "https://derech-tkuma.com/%d7%a1%d7%99%d7%95%d7%a8%d7%99%d7%9d/",
-        "sourceHash": "93d6a08c4ff7f96cd3686c15df6dea42496ebd12c64d0da4c8a080e34be3a2ce",
-        "capturedAt": "2026-10-19T14:21:27.949051+00:00",
+        "sourceUrl": "https://derech-tkuma.com/%D7%A1%D7%99%D7%95%D7%A8%D7%99%D7%9D/",
+        "sourceHash": "c3e0373d64325a73b365de25a369ce3e22f1b828d6e0b4adcd5a5b64cd06e260",
+        "capturedAt": "2026-10-28T15:25:33.234091+00:00",
         "canonical": "https://derech-tkuma.com/סיורים/",
         "productId": "7899",
         "dateLiteral": "23/10/2026",
@@ -235,9 +167,9 @@
         "note": "יום בחירות"
       },
       "provenance": {
-        "sourceUrl": "https://derech-tkuma.com/%d7%a1%d7%99%d7%95%d7%a8%d7%99%d7%9d/",
-        "sourceHash": "93d6a08c4ff7f96cd3686c15df6dea42496ebd12c64d0da4c8a080e34be3a2ce",
-        "capturedAt": "2026-10-19T14:21:27.949051+00:00",
+        "sourceUrl": "https://derech-tkuma.com/%D7%A1%D7%99%D7%95%D7%A8%D7%99%D7%9D/",
+        "sourceHash": "c3e0373d64325a73b365de25a369ce3e22f1b828d6e0b4adcd5a5b64cd06e260",
+        "capturedAt": "2026-10-28T15:25:33.234091+00:00",
         "canonical": "https://derech-tkuma.com/סיורים/",
         "productId": "7882",
         "dateLiteral": "27/10/26",
@@ -269,9 +201,9 @@
         "note": ""
       },
       "provenance": {
-        "sourceUrl": "https://derech-tkuma.com/%d7%a1%d7%99%d7%95%d7%a8%d7%99%d7%9d/",
-        "sourceHash": "93d6a08c4ff7f96cd3686c15df6dea42496ebd12c64d0da4c8a080e34be3a2ce",
-        "capturedAt": "2026-10-19T14:21:27.949051+00:00",
+        "sourceUrl": "https://derech-tkuma.com/%D7%A1%D7%99%D7%95%D7%A8%D7%99%D7%9D/",
+        "sourceHash": "c3e0373d64325a73b365de25a369ce3e22f1b828d6e0b4adcd5a5b64cd06e260",
+        "capturedAt": "2026-10-28T15:25:33.234091+00:00",
         "canonical": "https://derech-tkuma.com/סיורים/",
         "productId": "7891",
         "dateLiteral": "30/10/2026",
@@ -284,6 +216,176 @@
         "meetingPoint"
       ],
       "cardSelector": ".e-loop-item-7891"
+    },
+    {
+      "kind": "occurrence",
+      "id": "source-product-8249",
+      "content": {
+        "tourId": "open-tour",
+        "title": "סיור בעוטף ביום שלישי",
+        "date": "2026-11-03",
+        "dateLabel": "03/11/26",
+        "startsAt": null,
+        "endsAt": null,
+        "timezone": "Asia/Jerusalem",
+        "meetingPoint": "",
+        "priceMinor": 17000,
+        "currency": "ILS",
+        "capacity": null,
+        "note": ""
+      },
+      "provenance": {
+        "sourceUrl": "https://derech-tkuma.com/%D7%A1%D7%99%D7%95%D7%A8%D7%99%D7%9D/",
+        "sourceHash": "c3e0373d64325a73b365de25a369ce3e22f1b828d6e0b4adcd5a5b64cd06e260",
+        "capturedAt": "2026-10-28T15:25:33.234091+00:00",
+        "canonical": "https://derech-tkuma.com/סיורים/",
+        "productId": "8249",
+        "dateLiteral": "03/11/26",
+        "priceLiteral": "170.00"
+      },
+      "unknownFields": [
+        "startsAt",
+        "endsAt",
+        "capacity",
+        "meetingPoint"
+      ],
+      "cardSelector": ".e-loop-item-8249"
+    },
+    {
+      "kind": "occurrence",
+      "id": "source-product-8251",
+      "content": {
+        "tourId": "open-tour",
+        "title": "סיור בעוטף ביום שישי",
+        "date": "2026-11-13",
+        "dateLabel": "13/11/26",
+        "startsAt": null,
+        "endsAt": null,
+        "timezone": "Asia/Jerusalem",
+        "meetingPoint": "",
+        "priceMinor": 17000,
+        "currency": "ILS",
+        "capacity": null,
+        "note": ""
+      },
+      "provenance": {
+        "sourceUrl": "https://derech-tkuma.com/%D7%A1%D7%99%D7%95%D7%A8%D7%99%D7%9D/",
+        "sourceHash": "c3e0373d64325a73b365de25a369ce3e22f1b828d6e0b4adcd5a5b64cd06e260",
+        "capturedAt": "2026-10-28T15:25:33.234091+00:00",
+        "canonical": "https://derech-tkuma.com/סיורים/",
+        "productId": "8251",
+        "dateLiteral": "13/11/26",
+        "priceLiteral": "170.00"
+      },
+      "unknownFields": [
+        "startsAt",
+        "endsAt",
+        "capacity",
+        "meetingPoint"
+      ],
+      "cardSelector": ".e-loop-item-8251"
+    },
+    {
+      "kind": "occurrence",
+      "id": "source-product-8253",
+      "content": {
+        "tourId": "open-tour",
+        "title": "סיור בעוטף ביום חמישי",
+        "date": "2026-11-19",
+        "dateLabel": "19/11/26",
+        "startsAt": null,
+        "endsAt": null,
+        "timezone": "Asia/Jerusalem",
+        "meetingPoint": "",
+        "priceMinor": 17000,
+        "currency": "ILS",
+        "capacity": null,
+        "note": ""
+      },
+      "provenance": {
+        "sourceUrl": "https://derech-tkuma.com/%D7%A1%D7%99%D7%95%D7%A8%D7%99%D7%9D/",
+        "sourceHash": "c3e0373d64325a73b365de25a369ce3e22f1b828d6e0b4adcd5a5b64cd06e260",
+        "capturedAt": "2026-10-28T15:25:33.234091+00:00",
+        "canonical": "https://derech-tkuma.com/סיורים/",
+        "productId": "8253",
+        "dateLiteral": "19/11/26",
+        "priceLiteral": "170.00"
+      },
+      "unknownFields": [
+        "startsAt",
+        "endsAt",
+        "capacity",
+        "meetingPoint"
+      ],
+      "cardSelector": ".e-loop-item-8253"
+    },
+    {
+      "kind": "occurrence",
+      "id": "source-product-8255",
+      "content": {
+        "tourId": "open-tour",
+        "title": "סיור בעוטף ביום שישי",
+        "date": "2026-11-27",
+        "dateLabel": "27/11/26",
+        "startsAt": null,
+        "endsAt": null,
+        "timezone": "Asia/Jerusalem",
+        "meetingPoint": "",
+        "priceMinor": 17000,
+        "currency": "ILS",
+        "capacity": null,
+        "note": ""
+      },
+      "provenance": {
+        "sourceUrl": "https://derech-tkuma.com/%D7%A1%D7%99%D7%95%D7%A8%D7%99%D7%9D/",
+        "sourceHash": "c3e0373d64325a73b365de25a369ce3e22f1b828d6e0b4adcd5a5b64cd06e260",
+        "capturedAt": "2026-10-28T15:25:33.234091+00:00",
+        "canonical": "https://derech-tkuma.com/סיורים/",
+        "productId": "8255",
+        "dateLiteral": "27/11/26",
+        "priceLiteral": "170.00"
+      },
+      "unknownFields": [
+        "startsAt",
+        "endsAt",
+        "capacity",
+        "meetingPoint"
+      ],
+      "cardSelector": ".e-loop-item-8255"
+    },
+    {
+      "kind": "occurrence",
+      "id": "source-product-8257",
+      "content": {
+        "tourId": "open-tour",
+        "title": "סיור בעוטף ביום שני",
+        "date": "2026-11-30",
+        "dateLabel": "30/11/26",
+        "startsAt": null,
+        "endsAt": null,
+        "timezone": "Asia/Jerusalem",
+        "meetingPoint": "",
+        "priceMinor": 17000,
+        "currency": "ILS",
+        "capacity": null,
+        "note": ""
+      },
+      "provenance": {
+        "sourceUrl": "https://derech-tkuma.com/%D7%A1%D7%99%D7%95%D7%A8%D7%99%D7%9D/",
+        "sourceHash": "c3e0373d64325a73b365de25a369ce3e22f1b828d6e0b4adcd5a5b64cd06e260",
+        "capturedAt": "2026-10-28T15:25:33.234091+00:00",
+        "canonical": "https://derech-tkuma.com/סיורים/",
+        "productId": "8257",
+        "dateLiteral": "30/11/26",
+        "priceLiteral": "170.00"
+      },
+      "unknownFields": [
+        "startsAt",
+        "endsAt",
+        "capacity",
+        "meetingPoint"
+      ],
+      "cardSelector": ".e-loop-item-8257"
     }
   ],
   "bindings": [
@@ -308,8 +410,8 @@
       "kind": "tour",
       "id": "route-points",
       "field": "title",
-      "fieldId": "text-25",
-      "selector": "[data-edit-id=\"text-25\"]",
+      "fieldId": "text-651",
+      "selector": "[data-edit-id=\"text-651\"]",
       "prefix": "מסלול "
     },
     {
@@ -317,8 +419,8 @@
       "kind": "tour",
       "id": "route-points",
       "field": "title",
-      "fieldId": "text-78",
-      "selector": "[data-edit-id=\"text-78\"]",
+      "fieldId": "text-660",
+      "selector": "[data-edit-id=\"text-660\"]",
       "prefix": "מסלול "
     },
     {
@@ -326,8 +428,8 @@
       "kind": "tour",
       "id": "route-points",
       "field": "title",
-      "fieldId": "text-25",
-      "selector": "[data-edit-id=\"text-25\"]",
+      "fieldId": "text-340",
+      "selector": "[data-edit-id=\"text-340\"]",
       "prefix": "מסלול "
     },
     {
@@ -335,8 +437,8 @@
       "kind": "tour",
       "id": "route-points",
       "field": "title",
-      "fieldId": "text-85",
-      "selector": "[data-edit-id=\"text-85\"]",
+      "fieldId": "text-351",
+      "selector": "[data-edit-id=\"text-351\"]",
       "prefix": "מסלול "
     },
     {
@@ -344,8 +446,8 @@
       "kind": "tour",
       "id": "route-points",
       "field": "title",
-      "fieldId": "text-25",
-      "selector": "[data-edit-id=\"text-25\"]",
+      "fieldId": "text-339",
+      "selector": "[data-edit-id=\"text-339\"]",
       "prefix": "מסלול "
     },
     {
@@ -353,8 +455,8 @@
       "kind": "tour",
       "id": "route-points",
       "field": "title",
-      "fieldId": "text-85",
-      "selector": "[data-edit-id=\"text-85\"]",
+      "fieldId": "text-350",
+      "selector": "[data-edit-id=\"text-350\"]",
       "prefix": "מסלול "
     },
     {
@@ -362,8 +464,8 @@
       "kind": "tour",
       "id": "route-points",
       "field": "title",
-      "fieldId": "text-25",
-      "selector": "[data-edit-id=\"text-25\"]",
+      "fieldId": "text-345",
+      "selector": "[data-edit-id=\"text-345\"]",
       "prefix": "מסלול "
     },
     {
@@ -371,8 +473,8 @@
       "kind": "tour",
       "id": "route-points",
       "field": "title",
-      "fieldId": "text-91",
-      "selector": "[data-edit-id=\"text-91\"]",
+      "fieldId": "text-356",
+      "selector": "[data-edit-id=\"text-356\"]",
       "prefix": "מסלול "
     },
     {
@@ -380,8 +482,8 @@
       "kind": "tour",
       "id": "route-points",
       "field": "title",
-      "fieldId": "text-25",
-      "selector": "[data-edit-id=\"text-25\"]",
+      "fieldId": "text-396",
+      "selector": "[data-edit-id=\"text-396\"]",
       "prefix": "מסלול "
     },
     {
@@ -389,8 +491,8 @@
       "kind": "tour",
       "id": "route-points",
       "field": "title",
-      "fieldId": "text-67",
-      "selector": "[data-edit-id=\"text-67\"]",
+      "fieldId": "text-405",
+      "selector": "[data-edit-id=\"text-405\"]",
       "prefix": "מסלול "
     },
     {
@@ -398,8 +500,8 @@
       "kind": "tour",
       "id": "route-points",
       "field": "image",
-      "fieldId": "image-196",
-      "selector": "[data-image-id=\"image-196\"]"
+      "fieldId": "image-436",
+      "selector": "[data-image-id=\"image-436\"]"
     },
     {
       "page": "/המסלולים/",
@@ -431,8 +533,8 @@
       "kind": "tour",
       "id": "route-oz",
       "field": "title",
-      "fieldId": "text-28",
-      "selector": "[data-edit-id=\"text-28\"]",
+      "fieldId": "text-654",
+      "selector": "[data-edit-id=\"text-654\"]",
       "prefix": "מסלול "
     },
     {
@@ -440,8 +542,8 @@
       "kind": "tour",
       "id": "route-oz",
       "field": "title",
-      "fieldId": "text-83",
-      "selector": "[data-edit-id=\"text-83\"]",
+      "fieldId": "text-665",
+      "selector": "[data-edit-id=\"text-665\"]",
       "prefix": "מסלול "
     },
     {
@@ -449,8 +551,8 @@
       "kind": "tour",
       "id": "route-oz",
       "field": "title",
-      "fieldId": "text-28",
-      "selector": "[data-edit-id=\"text-28\"]",
+      "fieldId": "text-343",
+      "selector": "[data-edit-id=\"text-343\"]",
       "prefix": "מסלול "
     },
     {
@@ -458,8 +560,8 @@
       "kind": "tour",
       "id": "route-oz",
       "field": "title",
-      "fieldId": "text-90",
-      "selector": "[data-edit-id=\"text-90\"]",
+      "fieldId": "text-356",
+      "selector": "[data-edit-id=\"text-356\"]",
       "prefix": "מסלול "
     },
     {
@@ -467,8 +569,8 @@
       "kind": "tour",
       "id": "route-oz",
       "field": "title",
-      "fieldId": "text-28",
-      "selector": "[data-edit-id=\"text-28\"]",
+      "fieldId": "text-342",
+      "selector": "[data-edit-id=\"text-342\"]",
       "prefix": "מסלול "
     },
     {
@@ -476,8 +578,8 @@
       "kind": "tour",
       "id": "route-oz",
       "field": "title",
-      "fieldId": "text-90",
-      "selector": "[data-edit-id=\"text-90\"]",
+      "fieldId": "text-355",
+      "selector": "[data-edit-id=\"text-355\"]",
       "prefix": "מסלול "
     },
     {
@@ -485,8 +587,8 @@
       "kind": "tour",
       "id": "route-oz",
       "field": "title",
-      "fieldId": "text-28",
-      "selector": "[data-edit-id=\"text-28\"]",
+      "fieldId": "text-348",
+      "selector": "[data-edit-id=\"text-348\"]",
       "prefix": "מסלול "
     },
     {
@@ -494,8 +596,8 @@
       "kind": "tour",
       "id": "route-oz",
       "field": "title",
-      "fieldId": "text-96",
-      "selector": "[data-edit-id=\"text-96\"]",
+      "fieldId": "text-361",
+      "selector": "[data-edit-id=\"text-361\"]",
       "prefix": "מסלול "
     },
     {
@@ -503,8 +605,8 @@
       "kind": "tour",
       "id": "route-oz",
       "field": "title",
-      "fieldId": "text-28",
-      "selector": "[data-edit-id=\"text-28\"]",
+      "fieldId": "text-399",
+      "selector": "[data-edit-id=\"text-399\"]",
       "prefix": "מסלול "
     },
     {
@@ -512,8 +614,8 @@
       "kind": "tour",
       "id": "route-oz",
       "field": "title",
-      "fieldId": "text-72",
-      "selector": "[data-edit-id=\"text-72\"]",
+      "fieldId": "text-410",
+      "selector": "[data-edit-id=\"text-410\"]",
       "prefix": "מסלול "
     },
     {
@@ -554,8 +656,8 @@
       "kind": "tour",
       "id": "route-contact",
       "field": "title",
-      "fieldId": "text-31",
-      "selector": "[data-edit-id=\"text-31\"]",
+      "fieldId": "text-657",
+      "selector": "[data-edit-id=\"text-657\"]",
       "prefix": "מסלול "
     },
     {
@@ -563,8 +665,8 @@
       "kind": "tour",
       "id": "route-contact",
       "field": "title",
-      "fieldId": "text-88",
-      "selector": "[data-edit-id=\"text-88\"]",
+      "fieldId": "text-670",
+      "selector": "[data-edit-id=\"text-670\"]",
       "prefix": "מסלול "
     },
     {
@@ -572,8 +674,8 @@
       "kind": "tour",
       "id": "route-contact",
       "field": "title",
-      "fieldId": "text-31",
-      "selector": "[data-edit-id=\"text-31\"]",
+      "fieldId": "text-346",
+      "selector": "[data-edit-id=\"text-346\"]",
       "prefix": "מסלול "
     },
     {
@@ -581,8 +683,8 @@
       "kind": "tour",
       "id": "route-contact",
       "field": "title",
-      "fieldId": "text-95",
-      "selector": "[data-edit-id=\"text-95\"]",
+      "fieldId": "text-361",
+      "selector": "[data-edit-id=\"text-361\"]",
       "prefix": "מסלול "
     },
     {
@@ -590,8 +692,8 @@
       "kind": "tour",
       "id": "route-contact",
       "field": "title",
-      "fieldId": "text-31",
-      "selector": "[data-edit-id=\"text-31\"]",
+      "fieldId": "text-345",
+      "selector": "[data-edit-id=\"text-345\"]",
       "prefix": "מסלול "
     },
     {
@@ -599,8 +701,8 @@
       "kind": "tour",
       "id": "route-contact",
       "field": "title",
-      "fieldId": "text-95",
-      "selector": "[data-edit-id=\"text-95\"]",
+      "fieldId": "text-360",
+      "selector": "[data-edit-id=\"text-360\"]",
       "prefix": "מסלול "
     },
     {
@@ -608,8 +710,8 @@
       "kind": "tour",
       "id": "route-contact",
       "field": "title",
-      "fieldId": "text-31",
-      "selector": "[data-edit-id=\"text-31\"]",
+      "fieldId": "text-351",
+      "selector": "[data-edit-id=\"text-351\"]",
       "prefix": "מסלול "
     },
     {
@@ -617,8 +719,8 @@
       "kind": "tour",
       "id": "route-contact",
       "field": "title",
-      "fieldId": "text-101",
-      "selector": "[data-edit-id=\"text-101\"]",
+      "fieldId": "text-366",
+      "selector": "[data-edit-id=\"text-366\"]",
       "prefix": "מסלול "
     },
     {
@@ -626,8 +728,8 @@
       "kind": "tour",
       "id": "route-contact",
       "field": "title",
-      "fieldId": "text-31",
-      "selector": "[data-edit-id=\"text-31\"]",
+      "fieldId": "text-402",
+      "selector": "[data-edit-id=\"text-402\"]",
       "prefix": "מסלול "
     },
     {
@@ -635,8 +737,8 @@
       "kind": "tour",
       "id": "route-contact",
       "field": "title",
-      "fieldId": "text-77",
-      "selector": "[data-edit-id=\"text-77\"]",
+      "fieldId": "text-415",
+      "selector": "[data-edit-id=\"text-415\"]",
       "prefix": "מסלול "
     },
     {
@@ -644,8 +746,8 @@
       "kind": "tour",
       "id": "route-contact",
       "field": "image",
-      "fieldId": "image-199",
-      "selector": "[data-image-id=\"image-199\"]"
+      "fieldId": "image-438",
+      "selector": "[data-image-id=\"image-438\"]"
     },
     {
       "page": "/המסלולים/",
@@ -675,76 +777,10 @@
     {
       "page": "/סיורים/",
       "kind": "occurrence",
-      "id": "source-product-7844",
-      "field": "title",
-      "fieldId": "text-89",
-      "selector": "[data-edit-id=\"text-89\"]"
-    },
-    {
-      "page": "/סיורים/",
-      "kind": "occurrence",
-      "id": "source-product-7844",
-      "field": "dateLabel",
-      "fieldId": "text-90",
-      "selector": "[data-edit-id=\"text-90\"]"
-    },
-    {
-      "page": "/סיורים/",
-      "kind": "occurrence",
-      "id": "source-product-7844",
-      "field": "priceMinor",
-      "selector": ".e-loop-item-7844 .woocommerce-Price-amount",
-      "currencyFieldId": "text-91",
-      "sourceLiteral": "170.00"
-    },
-    {
-      "page": "/סיורים/",
-      "kind": "occurrence",
-      "id": "source-product-7844",
-      "field": "visibility",
-      "selector": ".e-loop-item-7844",
-      "cardClass": "e-loop-item-7844"
-    },
-    {
-      "page": "/סיורים/",
-      "kind": "occurrence",
-      "id": "source-product-7920",
-      "field": "title",
-      "fieldId": "text-93",
-      "selector": "[data-edit-id=\"text-93\"]"
-    },
-    {
-      "page": "/סיורים/",
-      "kind": "occurrence",
-      "id": "source-product-7920",
-      "field": "dateLabel",
-      "fieldId": "text-94",
-      "selector": "[data-edit-id=\"text-94\"]"
-    },
-    {
-      "page": "/סיורים/",
-      "kind": "occurrence",
-      "id": "source-product-7920",
-      "field": "priceMinor",
-      "selector": ".e-loop-item-7920 .woocommerce-Price-amount",
-      "currencyFieldId": "text-95",
-      "sourceLiteral": "170.00"
-    },
-    {
-      "page": "/סיורים/",
-      "kind": "occurrence",
-      "id": "source-product-7920",
-      "field": "visibility",
-      "selector": ".e-loop-item-7920",
-      "cardClass": "e-loop-item-7920"
-    },
-    {
-      "page": "/סיורים/",
-      "kind": "occurrence",
       "id": "source-product-7681",
       "field": "title",
-      "fieldId": "text-97",
-      "selector": "[data-edit-id=\"text-97\"]"
+      "fieldId": "text-380",
+      "selector": "[data-edit-id=\"text-380\"]"
     },
     {
       "page": "/סיורים/",
@@ -760,7 +796,7 @@
       "id": "source-product-7681",
       "field": "priceMinor",
       "selector": ".e-loop-item-7681 .woocommerce-Price-amount",
-      "currencyFieldId": "text-99",
+      "currencyFieldId": "text-381",
       "sourceLiteral": "249.00"
     },
     {
@@ -784,8 +820,8 @@
       "kind": "occurrence",
       "id": "source-product-7899",
       "field": "title",
-      "fieldId": "text-102",
-      "selector": "[data-edit-id=\"text-102\"]"
+      "fieldId": "text-383",
+      "selector": "[data-edit-id=\"text-383\"]"
     },
     {
       "page": "/סיורים/",
@@ -801,7 +837,7 @@
       "id": "source-product-7899",
       "field": "priceMinor",
       "selector": ".e-loop-item-7899 .woocommerce-Price-amount",
-      "currencyFieldId": "text-104",
+      "currencyFieldId": "text-384",
       "sourceLiteral": "170.00"
     },
     {
@@ -817,8 +853,8 @@
       "kind": "occurrence",
       "id": "source-product-7882",
       "field": "title",
-      "fieldId": "text-106",
-      "selector": "[data-edit-id=\"text-106\"]"
+      "fieldId": "text-386",
+      "selector": "[data-edit-id=\"text-386\"]"
     },
     {
       "page": "/סיורים/",
@@ -834,7 +870,7 @@
       "id": "source-product-7882",
       "field": "priceMinor",
       "selector": ".e-loop-item-7882 .woocommerce-Price-amount",
-      "currencyFieldId": "text-108",
+      "currencyFieldId": "text-387",
       "sourceLiteral": "170.00"
     },
     {
@@ -858,8 +894,8 @@
       "kind": "occurrence",
       "id": "source-product-7891",
       "field": "title",
-      "fieldId": "text-111",
-      "selector": "[data-edit-id=\"text-111\"]"
+      "fieldId": "text-389",
+      "selector": "[data-edit-id=\"text-389\"]"
     },
     {
       "page": "/סיורים/",
@@ -875,7 +911,7 @@
       "id": "source-product-7891",
       "field": "priceMinor",
       "selector": ".e-loop-item-7891 .woocommerce-Price-amount",
-      "currencyFieldId": "text-113",
+      "currencyFieldId": "text-390",
       "sourceLiteral": "170.00"
     },
     {
@@ -885,6 +921,171 @@
       "field": "visibility",
       "selector": ".e-loop-item-7891",
       "cardClass": "e-loop-item-7891"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-8249",
+      "field": "title",
+      "fieldId": "text-392",
+      "selector": "[data-edit-id=\"text-392\"]"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-8249",
+      "field": "dateLabel",
+      "fieldId": "text-393",
+      "selector": "[data-edit-id=\"text-393\"]"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-8249",
+      "field": "priceMinor",
+      "selector": ".e-loop-item-8249 .woocommerce-Price-amount",
+      "currencyFieldId": "text-394",
+      "sourceLiteral": "170.00"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-8249",
+      "field": "visibility",
+      "selector": ".e-loop-item-8249",
+      "cardClass": "e-loop-item-8249"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-8251",
+      "field": "title",
+      "fieldId": "text-396",
+      "selector": "[data-edit-id=\"text-396\"]"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-8251",
+      "field": "dateLabel",
+      "fieldId": "text-397",
+      "selector": "[data-edit-id=\"text-397\"]"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-8251",
+      "field": "priceMinor",
+      "selector": ".e-loop-item-8251 .woocommerce-Price-amount",
+      "currencyFieldId": "text-398",
+      "sourceLiteral": "170.00"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-8251",
+      "field": "visibility",
+      "selector": ".e-loop-item-8251",
+      "cardClass": "e-loop-item-8251"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-8253",
+      "field": "title",
+      "fieldId": "text-401",
+      "selector": "[data-edit-id=\"text-401\"]"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-8253",
+      "field": "dateLabel",
+      "fieldId": "text-402",
+      "selector": "[data-edit-id=\"text-402\"]"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-8253",
+      "field": "priceMinor",
+      "selector": ".e-loop-item-8253 .woocommerce-Price-amount",
+      "currencyFieldId": "text-403",
+      "sourceLiteral": "170.00"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-8253",
+      "field": "visibility",
+      "selector": ".e-loop-item-8253",
+      "cardClass": "e-loop-item-8253"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-8255",
+      "field": "title",
+      "fieldId": "text-406",
+      "selector": "[data-edit-id=\"text-406\"]"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-8255",
+      "field": "dateLabel",
+      "fieldId": "text-407",
+      "selector": "[data-edit-id=\"text-407\"]"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-8255",
+      "field": "priceMinor",
+      "selector": ".e-loop-item-8255 .woocommerce-Price-amount",
+      "currencyFieldId": "text-408",
+      "sourceLiteral": "170.00"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-8255",
+      "field": "visibility",
+      "selector": ".e-loop-item-8255",
+      "cardClass": "e-loop-item-8255"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-8257",
+      "field": "title",
+      "fieldId": "text-411",
+      "selector": "[data-edit-id=\"text-411\"]"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-8257",
+      "field": "dateLabel",
+      "fieldId": "text-412",
+      "selector": "[data-edit-id=\"text-412\"]"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-8257",
+      "field": "priceMinor",
+      "selector": ".e-loop-item-8257 .woocommerce-Price-amount",
+      "currencyFieldId": "text-413",
+      "sourceLiteral": "170.00"
+    },
+    {
+      "page": "/סיורים/",
+      "kind": "occurrence",
+      "id": "source-product-8257",
+      "field": "visibility",
+      "selector": ".e-loop-item-8257",
+      "cardClass": "e-loop-item-8257"
     }
   ],
   "notes": [

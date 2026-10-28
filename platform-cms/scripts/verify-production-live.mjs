@@ -4,14 +4,35 @@
  */
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
+import {gunzipSync} from 'node:zlib';
 import {pathToFileURL,fileURLToPath} from 'node:url';
 import {resolve} from 'node:path';
-import {validateProductionProfile,validateProductionCloudflareConfig,productionOrigin} from '../../production/release-profile.mjs';
+import {validateProductionProfile,validateProductionCloudflareConfig,productionOrigin,canonicalProductionProfile} from '../../production/release-profile.mjs';
 import {productionBuildInput} from './build-production.mjs';
 const release=JSON.parse(readFileSync(new URL('../lib/site-release.json',import.meta.url),'utf8'));
 export const productionSourceManifest=JSON.parse(readFileSync(new URL('../source-manifest.json',import.meta.url),'utf8'));
-// These four original source pages carry noindex; preserve their intent at HTTP and HTML.
-export const productionNoindexPaths=Object.freeze(['/refund_returns/','/מדיניות-פרטיות/','/תקנון-אתר/','/thanks/']);
+export function readSourceIndexingProof(){
+ const policy=JSON.parse(readFileSync(new URL('../source-pages/source-indexing.json',import.meta.url),'utf8')),provenanceBytes=readFileSync(new URL('../source-pages/provenance.json',import.meta.url)),provenance=JSON.parse(provenanceBytes);
+ const hash=value=>createHash('sha256').update(value).digest('hex'),{policySha256,...payload}=policy,paths=Object.keys(productionSourceManifest).sort();
+ const supported={37:['source-20261019','2026-10-19',4,32],51:['wordpress-public-20261028','2026-10-28',18,32]},expected=supported[paths.length];
+ if(!expected||policy.version!==1||policy.origin!==productionOrigin||policy.snapshotId!==expected[0]||!policy.capturedAt.startsWith(expected[1])||policy.routeCount!==paths.length||policy.expectedSitemapCount!==expected[3]||hash(canonicalProductionProfile(payload))!==policySha256||hash(canonicalProductionProfile(productionSourceManifest))!==policy.sourceManifestCanonicalSha256||hash(provenanceBytes)!==policy.provenanceSha256||provenance.logicalPageCount!==paths.length||provenance.origin!==productionOrigin||JSON.stringify(Object.keys(policy.pages).sort())!==JSON.stringify(paths)||JSON.stringify(Object.keys(provenance.pages).sort())!==JSON.stringify(paths))throw Error('source_indexing_policy_mismatch');
+ const noindexPaths=[];
+ for(const path of paths){
+  const record=provenance.pages[path],page=policy.pages[path],source=productionSourceManifest[path];
+  if(!path.startsWith('/')||!path.endsWith('/')||/[?#\\%\x00-\x1f]/.test(path)||path!=='/'&&path.slice(1,-1).split('/').some(part=>!part||part==='.'||part==='..')||!/^current-[a-f0-9]{20}\.html\.gz$/.test(record.fixture)||page.fixture!==record.fixture||record.fixture!==source.fixture||page.sourceSha256!==record.sourceSha256||record.sourceSha256!==source.sourceSha256)throw Error('source_indexing_identity_mismatch');
+  const raw=gunzipSync(readFileSync(new URL('../source-pages/'+record.fixture,import.meta.url)),{maxOutputLength:4*1024*1024});
+  if(hash(raw)!==record.sourceSha256)throw Error('source_indexing_raw_hash_mismatch');
+  const head=(raw.toString('utf8').match(/<head\b[^>]*>([\s\S]*?)<\/head\s*>/i)?.[1]??'').replace(/<!--([\s\S]*?)-->|<(script|style)\b[^>]*>[\s\S]*?<\/\2\s*>/gi,'');
+  const robots=(head.match(/<meta\b[^>]*>/gi)??[]).map(attrs).filter(meta=>['robots','googlebot','bingbot'].includes(meta.name?.toLowerCase())).map(meta=>({name:meta.name.toLowerCase(),content:entities(meta.content??'')}));
+  const denied=robots.some(tag=>/(?:^|[\s,:;])(?:noindex|none)(?:$|[\s,;])/i.test(tag.content));
+  if(page.noindex!==denied||JSON.stringify(page.robots)!==JSON.stringify(robots))throw Error('source_indexing_raw_robots_mismatch');
+  if(denied)noindexPaths.push(path);
+ }
+ if(noindexPaths.length!==expected[2]||JSON.stringify(noindexPaths)!==JSON.stringify(policy.noindexPaths))throw Error('source_indexing_noindex_inventory_mismatch');
+ return Object.freeze({snapshotId:policy.snapshotId,routeCount:paths.length,expectedSitemapCount:policy.expectedSitemapCount,noindexPaths:Object.freeze(noindexPaths),policySha256});
+}
+export const sourceIndexingProof=readSourceIndexingProof();
+export const productionNoindexPaths=sourceIndexingProof.noindexPaths;
 export const protectedProductionPaths=['/admin/','/admin/execution/','/api/users/','/api/tasks/','/api/reports/','/api/execution/'];
 const assetNames=['production-guard.js','production-visitor.js'];
 const digest=value=>createHash('sha256').update(value).digest('hex');
@@ -28,7 +49,7 @@ export async function verifyProductionLive({profile,config,fetcher,now=Date.now,
  // There is deliberately no global-fetch default for imports/tests.
  if(typeof fetcher!=='function'||!Number.isSafeInteger(maxWaitMs)||maxWaitMs<1||maxWaitMs>180000)fail('/','explicit_inputs_required');
  try{profile=validateProductionProfile(profile,release.contentRelease,profile?.sourceCommit);validateProductionCloudflareConfig(config,profile);}catch{fail('/','production_profile_not_accepted');}
- const paths=Object.keys(productionSourceManifest),sitemap=expectedProductionSitemap();if(paths.length!==37||sitemap.length!==32||release.pages!==37)fail('/','source_inventory_unexpected');
+ const paths=Object.keys(productionSourceManifest),sitemap=expectedProductionSitemap();if(paths.length!==sourceIndexingProof.routeCount||sitemap.length!==sourceIndexingProof.expectedSitemapCount||release.pages!==sourceIndexingProof.routeCount)fail('/','source_inventory_unexpected');
  const deadline=now()+maxWaitMs,checks=[];
  async function get(path,{forged=false}={}){
   const url=new URL(encodeURI(path),profile.origin).href,remaining=deadline-now();if(remaining<=0)fail(path,'verification_deadline');
@@ -76,7 +97,7 @@ export async function verifyProductionLive({profile,config,fetcher,now=Date.now,
   }else{
    try{
     const entries=[...text.matchAll(/<loc>([^<]*)<\/loc>/g)].map(match=>normalizedUrl(match[1])).sort();
-    if(!response.headers.get('content-type')?.includes('xml')||/<!DOCTYPE|<!ENTITY/i.test(text)||!/<urlset\b[^>]*xmlns=["']http:\/\/www\.sitemaps\.org\/schemas\/sitemap\/0\.9["']/i.test(text)||(text.match(/<url>/g)??[]).length!==32||entries.length!==32||JSON.stringify(entries)!==JSON.stringify(sitemap))fail(path,'sitemap_mismatch');
+    if(!response.headers.get('content-type')?.includes('xml')||/<!DOCTYPE|<!ENTITY/i.test(text)||!/<urlset\b[^>]*xmlns=["']http:\/\/www\.sitemaps\.org\/schemas\/sitemap\/0\.9["']/i.test(text)||(text.match(/<url>/g)??[]).length!==sitemap.length||entries.length!==sitemap.length||JSON.stringify(entries)!==JSON.stringify(sitemap))fail(path,'sitemap_mismatch');
    }catch(error){if(error instanceof ProductionLiveError)throw error;fail(path,'sitemap_mismatch');}
   }
   passed(path,'discovery');
@@ -86,7 +107,7 @@ export async function verifyProductionLive({profile,config,fetcher,now=Date.now,
   if(response.status!==(path==='/api/health'?200:404)||!noindex(response.headers.get('x-robots-tag'))){await response.body?.cancel();fail(path,'nonpublic_indexing_or_status_mismatch');}
   if(path==='/api/health'){
    let health;try{health=JSON.parse((await bounded(response,16384)).toString('utf8'));}catch{fail(path,'health_invalid');}
-   if(health.status!=='ready'||health.contentRelease!==release.contentRelease||health.pages!==37||health.database!==true||health.mediaBinding!==true)fail(path,'health_invalid');
+   if(health.status!=='ready'||health.contentRelease!==release.contentRelease||health.pages!==sourceIndexingProof.routeCount||health.database!==true||health.mediaBinding!==true)fail(path,'health_invalid');
   }else await response.body?.cancel();
   passed(path,'nonpublic_noindex');
  }
@@ -99,7 +120,7 @@ export async function verifyProductionLive({profile,config,fetcher,now=Date.now,
   passed(path,forged?'forged_denied':'anonymous_denied');
  }
  if(now()>deadline)fail('/','verification_deadline');
- return {productionLiveVerified:true,sourceCommit:profile.sourceCommit,publicPages:37,sitemapUrls:32,productionAssets:assetNames.length,protectedChecks:protectedProductionPaths.length*2,requests:checks.length,readOnly:true,realOwnerLoginVerified:false,formDeliveryVerified:false,paymentVerified:false,measurementDeliveryVerified:false,checks};
+ return {productionLiveVerified:true,sourceCommit:profile.sourceCommit,publicPages:sourceIndexingProof.routeCount,sitemapUrls:sitemap.length,productionAssets:assetNames.length,protectedChecks:protectedProductionPaths.length*2,requests:checks.length,readOnly:true,realOwnerLoginVerified:false,formDeliveryVerified:false,paymentVerified:false,measurementDeliveryVerified:false,checks};
 }
 export async function main(environment=process.env){
  const {profile,config}=productionBuildInput(environment);

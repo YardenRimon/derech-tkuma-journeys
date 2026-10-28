@@ -7,7 +7,7 @@ import { operationalReport, jobLabels, taskLabels, dateLabel } from '@/lib/repor
 export const dynamic='force-dynamic';
 export const metadata={robots:{index:false,follow:false}};
 const recipes:{[key:string]:string}={route_workspace:'עדכון מסלול',lead_workflow:'מערך טיפול בפניות',campaign_package:'הכנת חומרי קמפיין',owner_decision:'החלטת בעלים'};
-const operations:{[key:string]:string}={save:'שמירת טיוטה',publish:'פרסום בתוכן CMS',restore:'שחזור לטיוטה',delete:'הסרת טיוטה'};
+const operations:{[key:string]:string}={save:'שמירת טיוטה',publish:'פרסום בתוכן CMS',restore:'שחזור לטיוטה',delete:'הסרת טיוטה',source_refresh:'עדכון מהאתר המקורי'};
 export default async function ReportsPage(){
  await requireChatGPTUser('/admin/reports');const user=await authorizeCmsUser('users');const r=await operationalReport(getD1(),siteScope(),user.role==='system_admin');
  return <AdminShell active="/admin/reports" title="דוחות והיסטוריית תוכן" description="בדיקת פעולות השרת, סנכרון תשובות, טיוטות ופרסומים באתר." email={user.email} role={user.role}>

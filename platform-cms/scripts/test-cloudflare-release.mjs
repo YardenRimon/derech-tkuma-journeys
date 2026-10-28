@@ -16,6 +16,8 @@ let result=spawnSync('python3',['-c',python],{encoding:'utf8'});assert.equal(res
 const run=name=>{const archive=join(root,name+'.tgz'),hash=createHash('sha256').update(readFileSync(archive)).digest('hex');return spawnSync('python3',[hydrate,'--archive',archive,'--sha256',hash,'--root',root],{encoding:'utf8'})};result=run('bad');assert.notEqual(result.status,0);result=run('good');assert.equal(result.status,0,result.stderr);assert.equal(readFileSync(join(root,'public/img.png'),'utf8'),content);writeFileSync(join(root,'public/img.png'),'changed');assert.notEqual(run('good').status,0);rmSync(root,{recursive:true,force:true});
 console.log('Cloudflare release: account/resource/auth/scope/domain gates, source SHA, sanitized checks, Sites isolation, pinned media hydration and traversal/tamper refusal passed.');
 
+await import('./test-source-snapshot-assets.mjs');
+
 await import('./test-cloudflare-source.mjs');
 
 const {verifyGzipBudget}=await import('./verify-cloudflare-size.mjs');assert.equal(verifyGzipBudget('Total Upload: 1509.86 KiB / gzip: 677.52 KiB').passed,true);assert.throws(()=>verifyGzipBudget('Total Upload: 21249.59 KiB / gzip: 3235.17 KiB'));assert.throws(()=>verifyGzipBudget('unknown size'));

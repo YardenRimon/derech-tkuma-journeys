@@ -52,6 +52,8 @@ jobs:
           case "$MEDIA_URL" in https://*) ;; *) exit 1 ;; esac
           curl --fail --silent --show-error --proto '=https' --proto-redir '=https' --location --max-redirs 2 "$MEDIA_URL" -o "$RUNNER_TEMP/derech-media.tgz"
           python3 platform-cms/scripts/hydrate-cloudflare-media.py --archive "$RUNNER_TEMP/derech-media.tgz" --sha256 "$MEDIA_SHA256" --root platform-cms
+      - name: Hydrate pinned source snapshot supplement
+        run: python3 platform-cms/scripts/hydrate-source-snapshot.py --root platform-cms
       - name: Build and verify the separate production artifact
         working-directory: platform-cms
         run: |

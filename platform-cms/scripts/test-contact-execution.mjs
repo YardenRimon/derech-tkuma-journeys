@@ -46,6 +46,22 @@ try{
  const scoped=fixture(),wanted=await scoped.seed(input('50000000-0000-4000-8000-000000000005','af355f0'));
  const base=await scoped.record(wanted);for(const [key,alter]of [['10000000-0000-4000-8000-000000000001',{scope:{tenantId:'other',siteId:'other-main'}}],['20000000-0000-4000-8000-000000000002',{source:{formId:'1b8a2d8',postId:'1489'}}],['30000000-0000-4000-8000-000000000003',{source:{formId:'0899899',postId:'999'}}],['40000000-0000-4000-8000-000000000004',{schema:2}]])scoped.sqlite.prepare('INSERT INTO cms_settings VALUES(?,?)').run('contact:v1:derech:derech-main:'+key,JSON.stringify({...base,...alter,key}));
  const beforeScoped=calls.length;r=clean(await scoped.dispatch(transport)(scoped.db,scoped.bucket,scope,configuration()));assert.equal(r.state,'provider_accepted');assert.equal(calls.length,beforeScoped+1);assert.equal(calls.at(-1).body.form,'af355f0');assert.equal(calls.at(-1).body.post,'18');assert.equal(calls.at(-1).headers['x-contact-idempotency'],base.receipt);assert.equal((await scoped.record(wanted)).outbox.state,'provider_accepted');assert.equal((await scoped.dispatch(transport)(scoped.db,scoped.bucket,scope,configuration())).state,'idle');
+ // Both source route groups coexist under the same lock/candidate limit.
+ const footerContract={...contract,formIds:['1b8a2d8'],endpoint:'https://hook.eu2.make.com/synthetic_footer_fixture_only',fields:{...contract.fields,message:'message'}};
+ for(const invalid of [[],[contract,contract],[contract,{...footerContract,endpoint:contract.endpoint}],[contract,footerContract,footerContract],{...footerContract,formIds:['1b8a2d8','0899899']},{...footerContract,fields:contract.fields},{...contract,fields:{...contract.fields,message:'message'}}]){
+  const result=await dispatch(poison,poison,scope,configuration(invalid));assert.equal(result.state,'unconfigured','invalid or overlapping routes rejected before I/O');
+ }
+ const both=fixture(),footerInput={...input('10000000-0000-4000-8000-000000000001','1b8a2d8'),message:'הודעה פרטית\nשורה נוספת'},footerKey=await both.seed(footerInput),homeKey=await both.seed(input('20000000-0000-4000-8000-000000000002'));
+ const mixedConfiguration=configuration([contract,footerContract]),mixedCalls=[];
+ const separateTransport=async(url,options)=>{mixedCalls.push({url,payload:JSON.parse(options.body)});return fetch(provider,options);};
+ const mixedRun=both.dispatch(separateTransport);let mixedResult=await mixedRun(both.db,both.bucket,scope,mixedConfiguration);
+ assert.equal(mixedResult.state,'provider_accepted');assert.equal(mixedCalls.length,1,'at most one provider attempt across all configured routes');assert.equal(mixedCalls[0].url,footerContract.endpoint);assert.equal(mixedCalls[0].payload.message,footerInput.message);assert.equal((await both.record(homeKey)).outbox.state,'pending_routing');
+ assert.ok(!JSON.stringify(mixedResult).includes(footerInput.message));
+ mixedResult=await mixedRun(both.db,both.bucket,scope,mixedConfiguration);assert.equal(mixedResult.state,'provider_accepted');assert.equal(mixedCalls.length,2);assert.equal(mixedCalls[1].url,contract.endpoint);assert.ok(!Object.hasOwn(mixedCalls[1].payload,'message'));
+ assert.equal((await mixedRun(both.db,both.bucket,scope,mixedConfiguration)).state,'idle');
+ // A contract for the other group never consumes a footer record.
+ const footerOnly=fixture();await footerOnly.seed({...footerInput,idempotencyKey:crypto.randomUUID()});assert.equal((await footerOnly.dispatch(separateTransport)(footerOnly.db,footerOnly.bucket,scope,configuration())).state,'idle');
+ await both.service.erase(scope,footerKey,3,'requested',new Date(BASE*1000));assert.ok(!JSON.stringify(await both.record(footerKey)).includes(footerInput.message));
  // Independent callers cannot obtain two leases or retry uncertain/sending rows.
  const race=fixture(),raceKey=await race.seed(),run=race.dispatch(transport),countBeforeRace=calls.length;
  const results=await Promise.all([run(race.db,race.bucket,scope,configuration()),run(race.db,race.bucket,scope,configuration())]);assert.equal(results.filter(x=>x.state==='provider_accepted').length,1);assert.equal(results.filter(x=>x.state==='conflict').length,1);assert.equal(calls.length,countBeforeRace+1);

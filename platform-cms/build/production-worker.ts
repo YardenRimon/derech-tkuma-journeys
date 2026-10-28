@@ -1,6 +1,7 @@
 /** Separate owner-accepted production entry. The review entry/validator stay
  * fixed to review and cannot opt into this code through runtime requests. */
 import handler from 'vinext/server/fetch-handler';
+import {sourcePublicRedirect} from '../lib/source-redirect';
 import {serveCloudflareBuildAsset} from './cloudflare-assets.mjs';
 import {stripIdentityHeaders,platformAuthBoundary} from './platform-auth-boundary';
 import {readPlatformAuthIdentity,appendPlatformAuthCookies} from '../lib/platform-auth';
@@ -12,7 +13,7 @@ export default{
   const rejected=(status=503)=>new Response('Production release unavailable',{status,headers:{'cache-control':'no-store','x-robots-tag':'noindex, nofollow'}});
   if(!profile)return rejected();
   if(url.origin!==profile.origin){
-   if((request.method==='GET'||request.method==='HEAD')&&(productionPublicPath(url.pathname)||['/robots.txt','/sitemap.xml'].includes(url.pathname)))return new Response(null,{status:308,headers:{location:profile.origin+url.pathname,'cache-control':'public, max-age=300','x-robots-tag':'noindex, nofollow'}});
+   if((request.method==='GET'||request.method==='HEAD')&&(productionPublicPath(url.pathname)||sourcePublicRedirect(url.pathname,request.method)||['/robots.txt','/sitemap.xml'].includes(url.pathname)))return new Response(null,{status:308,headers:{location:profile.origin+url.pathname,'cache-control':'public, max-age=300','x-robots-tag':'noindex, nofollow'}});
    return rejected(421);
   }
   if((/^\/api\/contact\/?$/.test(url.pathname)&&!profile.contactReady)||(/^\/api\/(?:payment|payments|orders)(?:\/|$)/.test(url.pathname)&&!profile.paymentsReady))return rejected();

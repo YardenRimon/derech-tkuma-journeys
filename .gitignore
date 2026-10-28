@@ -14,3 +14,6 @@ legacy-materials/
 # Private operational evidence and local provider state are never public source.
 /audit/
 /.wrangler/
+
+# Versioned public snapshot binaries are pinned separately and hydrated by CI.
+/platform-cms/public/__source_assets__/

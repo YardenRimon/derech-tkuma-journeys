@@ -22,30 +22,38 @@ export function createContactDispatcher({clock=()=>Math.floor(Date.now()/1000),f
  const gate=()=>{if(!allowed())throw new Held();};
  return async function dispatch(db:D1Database,bucket:R2Bucket|undefined,scope:ContactScope,config:ContactDeliveryConfig):Promise<DispatchResult>{
   if(config.CONTACT_DELIVERY_MODE!=='verified-make')return{state:'disabled'};
-  let accepted:Awaited<ReturnType<typeof verifiedMakeContract>>,days:number;
+  let accepted:Awaited<ReturnType<typeof verifiedMakeContract>>[],days:number;
   try{
    contactScope(scope);if(scope.tenantId!=='derech'||scope.siteId!=='derech-main')return{state:'unconfigured'};
    const secret=config.CONTACT_DELIVERY_SECRET,proof=config.CONTACT_DELIVERY_CONTRACT_SHA256;
    if(typeof secret!=='string'||!secret||secret.length>8192||typeof proof!=='string'||! /^[a-f0-9]{64}$/.test(proof)||await sha(secret)!==proof)return{state:'unconfigured'};
-   accepted=await verifiedMakeContract(JSON.parse(secret),scope);days=contactRetentionDays(config);
+   const parsed=JSON.parse(secret),contracts=Array.isArray(parsed)?parsed:[parsed];
+   if(!contracts.length||contracts.length>2)return{state:'unconfigured'};
+   accepted=await Promise.all(contracts.map(contract=>verifiedMakeContract(contract,scope)));
+   const ids=accepted.flatMap(value=>value.contract.formIds);
+   if(new Set(ids).size!==ids.length||new Set(accepted.map(value=>value.contract.endpoint)).size!==accepted.length)return{state:'unconfigured'};
+   days=contactRetentionDays(config);
    if(!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(config.CONTACT_PRIVACY_AUTHORITY_ID??''))return{state:'unconfigured'};
   }catch{return{state:'unconfigured'};}
   if(!await verified||!allowed())return{state:'held'};
   try{
    const privacy=new R2ContactPrivacy(bucket,config.CONTACT_PRIVACY_AUTHORITY_ID);
    await privacy.check(scope);gate();
-   const prefix=`contact:v1:${scope.tenantId}:${scope.siteId}:`,ids=accepted.contract.formIds;
+   const prefix=`contact:v1:${scope.tenantId}:${scope.siteId}:`,ids=accepted.flatMap(value=>value.contract.formIds);
    // Read only an opaque key/revision until Contacts performs authoritative
    // privacy/expiry checks. The SQL cannot select unknown forms or other sites.
-   const candidate=await db.prepare(`SELECT json_extract(value,'$.key') AS contactKey,json_extract(value,'$.revision') AS revision
+   const candidate=await db.prepare(`SELECT json_extract(value,'$.key') AS contactKey,json_extract(value,'$.revision') AS revision,json_extract(value,'$.source.formId') AS formId
     FROM cms_settings WHERE key LIKE ? AND json_valid(value) AND json_extract(value,'$.schema')=1
     AND json_extract(value,'$.scope.tenantId')=? AND json_extract(value,'$.scope.siteId')=?
     AND key=?||json_extract(value,'$.key') AND json_extract(value,'$.outbox.state')='pending_routing'
     AND json_extract(value,'$.source.formId') IN (${ids.map(()=>'?').join(',')})
     AND ((json_extract(value,'$.source.formId')='0899899' AND json_extract(value,'$.source.postId')='13')
-      OR (json_extract(value,'$.source.formId')='af355f0' AND json_extract(value,'$.source.postId')='18'))
-    ORDER BY key LIMIT 1`).bind(prefix+'%',scope.tenantId,scope.siteId,prefix,...ids).first<{contactKey:string;revision:number}>();
+      OR (json_extract(value,'$.source.formId')='af355f0' AND json_extract(value,'$.source.postId')='18')
+      OR (json_extract(value,'$.source.formId')='1b8a2d8' AND json_extract(value,'$.source.postId')='1489'))
+    ORDER BY key LIMIT 1`).bind(prefix+'%',scope.tenantId,scope.siteId,prefix,...ids).first<{contactKey:string;revision:number;formId:string}>();
    if(!candidate)return{state:'idle'};
+   const selected=accepted.find(value=>value.contract.formIds.includes(candidate.formId));
+   if(!selected)return{state:'unavailable'};
    if(typeof candidate.contactKey!=='string'||!Number.isSafeInteger(candidate.revision)||candidate.revision<1)return{state:'unavailable'};
    const service=new Contacts(new D1Contacts(db),days,privacy),guarded=Object.create(service) as Contacts;
    let claimed:ContactRecord|undefined;
@@ -58,7 +66,7 @@ export function createContactDispatcher({clock=()=>Math.floor(Date.now()/1000),f
     // At most one attempt; redirects and automatic resubmission are forbidden.
     return fetchImpl(input,init);
    };
-   const result=await deliverContact(guarded,scope,candidate.contactKey,candidate.revision,accepted.contract,fetcher);
+   const result=await deliverContact(guarded,scope,candidate.contactKey,candidate.revision,selected.contract,fetcher);
    if(result.state==='provider_accepted'||result.state==='unknown'||result.state==='failed')return{state:result.state,receipt:result.receipt};
    return{state:'unavailable'};
   }catch(error){

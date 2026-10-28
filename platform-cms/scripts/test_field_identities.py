@@ -15,6 +15,48 @@ SPEC.loader.exec_module(IDENTITIES)
 assign_fields = IDENTITIES.assign_fields
 require_source_template = IDENTITIES.require_source_template
 SHA = "a" * 64
+# Frozen19October seed identity proof; current imports must never reseed/drop IDs.
+LEGACY_ID_LIMITS = {
+    "/": 647,
+    "/maslulim/נקודות-החיבור/": 336,
+    "/maslulim/עוז-מול-תופת/": 335,
+    "/maslulim/קו-המגע/": 341,
+    "/אודותינו/": 331,
+    "/גבעת-התצפתניות/": 431,
+    "/הבלוג/": 309,
+    "/המדריכים/": 346,
+    "/המסלולים/": 392,
+    "/התצפיות/": 289,
+    "/מסע-עוטף/": 332,
+    "/מפת-האתר/": 318,
+    "/מצפה-כרם-שלום/": 283,
+    "/מצפה-נירים/": 300,
+    "/סיורים/": 376,
+    "/שאלות-נפוצות-נקודות-תצפית-בעוטף-עזה/": 386,
+    "/שאלות-תשובות-דרך-התקומה/": 409,
+    "/maslulim/": 291,
+    "/אטרקציות-בעוטף-המדריך-המלא-לחוויות/": 356,
+    "/הצעה/": 286,
+    "/טיולים-בעוטף-עזה-להכיר-את-המרחב-דרך-ח/": 348,
+    "/טיולים-עם-ילדים-בדרום-ובעוטף-עזה-חוויה/": 383,
+    "/מדריך-לסיור-בעוטף-עזה-כך-תבחרו-את-החו/": 339,
+    "/מסלול-נקודות-החיבור/": 329,
+    "/מסלול-עוז-מול-תופת/": 332,
+    "/מסלול-קו-המגע/": 350,
+    "/סיור-באתר-הנובה-להבין-את-מה-שקרה-דרך-ה/": 331,
+    "/סיור-בקיבוצי-העוטף-לחוות-להבין-ולהת/": 336,
+    "/סיור-וביקור-בבארי-נחל-עוז-וכפר-עזה-לה/": 333,
+    "/סיור-מודרך-בעוטף-עזה-מלחמת-חרבות-ברזל/": 339,
+    "/סיורים-בעוטף-עזה-בעקבות-המלחמה/": 331,
+    "/סיורים-לעוטף-עזה-לצוות-מורים-ותלמידים/": 331,
+    "/refund_returns/": 280,
+    "/הבלוג/2/": 239,
+    "/מדיניות-פרטיות/": 280,
+    "/תקנון-אתר/": 281,
+    "/thanks/": 312
+}
+LEGACY_IDS_SHA256 = '14c0d4875db182310721bfea7db7fc69aca0b8bf4358673b8b70dad42c6a318e'
+LEGACY_SEED_SHA256 = 'cae96d53a12d435e4095ce1081b24b2e7a11fd4faf59dfe07f1067203a3f2462'
 
 
 def text(value):
@@ -141,13 +183,27 @@ class FieldIdentityTests(unittest.TestCase):
         self.assertNotIn("text-3", ids)
         self.assertEqual(retired, {"text-1": "repeated", "text-3": "repeated"})
 
-    def test_all_37_real_pages_keep_every_existing_id(self):
+    def test_all_current_real_pages_keep_every_active_and_retired_identity(self):
         raw = (ROOT / "lib/generated-pages.json").read_bytes()
         pages = json.loads(raw)
         registry = json.loads((ROOT / "source-pages/field-identities.json").read_text())
         manifest = json.loads((ROOT / "source-manifest.json").read_text())
-        self.assertEqual(len(pages), 37)
-        self.assertEqual(registry["seedGeneratedPagesSha256"], hashlib.sha256(raw).hexdigest())
+        provenance=json.loads((ROOT / "source-pages/provenance.json").read_text())
+        build=json.loads((ROOT / "source-pages/review-build.json").read_text())
+        expected=51 if provenance.get("snapshotId")=="wordpress-public-20261028" else 37
+        self.assertIn(provenance.get("snapshotId"), [None,"source-20261019","wordpress-public-20261028"])
+        self.assertEqual(len(pages), expected)
+        self.assertEqual(build["routeCount"], expected)
+        self.assertEqual(provenance["logicalPageCount"], expected)
+        self.assertEqual(build["payloadSha256"], hashlib.sha256(raw).hexdigest())
+        self.assertEqual(registry["seedGeneratedPagesSha256"], LEGACY_SEED_SHA256)
+        legacy_ids={}
+        for slug,limit in LEGACY_ID_LIMITS.items():
+            all_fields=registry["pages"][slug]["active"]+registry["pages"][slug]["retired"]
+            legacy_ids[slug]=sorted([entry["id"] for entry in all_fields if int(entry["id"].rsplit("-",1)[1])<=limit],key=lambda value:int(value.rsplit("-",1)[1]))
+            self.assertEqual(len(legacy_ids[slug]),limit,slug+" lost original identities")
+        self.assertEqual(hashlib.sha256(json.dumps(legacy_ids,ensure_ascii=False,sort_keys=True,separators=(",",":")).encode()).hexdigest(),LEGACY_IDS_SHA256)
+        if expected==37:self.assertEqual(registry["seedGeneratedPagesSha256"],hashlib.sha256(raw).hexdigest())
         self.assertEqual(set(pages), set(registry["pages"]))
         for slug, page in pages.items():
             require_source_template(slug, manifest[slug]["sha256"], registry)
@@ -155,7 +211,11 @@ class FieldIdentityTests(unittest.TestCase):
             candidates = list(page["fields"].values())
             ids, retired, updated = assign_fields(slug, candidates, registry, source_sha256=manifest[slug]["sha256"])
             self.assertEqual(ids, list(page["fields"]), slug)
-            self.assertEqual(retired, {}, slug)
+            expected_retired={entry["id"]:entry["value"] for entry in registry["pages"][slug]["retired"]}
+            self.assertEqual(retired, expected_retired, slug)
+            self.assertEqual(page.get("retired",{}),expected_retired,slug)
+            allocated=[int(entry["id"].rsplit("-",1)[1]) for entry in registry["pages"][slug]["active"]+registry["pages"][slug]["retired"]]
+            self.assertEqual(sorted(allocated),list(range(1,registry["pages"][slug]["nextNumber"])),slug+" lost or reused allocated IDs")
             self.assertEqual(updated, registry, slug)
             self.assertEqual(registry, before, slug)
             self.assertEqual([entry["id"] for entry in registry["pages"][slug]["active"]], ids)

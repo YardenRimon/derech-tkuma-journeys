@@ -42,6 +42,8 @@ jobs:
           python3 -m unittest discover -s backup-receiver -p 'test_*.py'
           node backup-receiver/test-r2-local.mjs
           python3 -m unittest discover -s scripts -p 'test_site_review_vps.py'
+      - name: Hydrate committed public source snapshot for checks
+        run: python3 platform-cms/scripts/hydrate-source-snapshot.py --root platform-cms
       - name: Verify pinned build against full source reconstruction
         working-directory: platform-cms
         run: npm run prepare:pages:verify
@@ -142,6 +144,8 @@ jobs:
           case "$MEDIA_URL" in https://*) ;; *) exit 1 ;; esac
           curl --fail --silent --show-error --proto '=https' --proto-redir '=https' --location --max-redirs 2 "$MEDIA_URL" -o "$RUNNER_TEMP/derech-media.tgz"
           python3 platform-cms/scripts/hydrate-cloudflare-media.py --archive "$RUNNER_TEMP/derech-media.tgz" --sha256 "$MEDIA_SHA256" --root platform-cms
+      - name: Hydrate pinned source snapshot supplement
+        run: python3 platform-cms/scripts/hydrate-source-snapshot.py --root platform-cms
       - name: Verify full source reconstruction and tested standalone build
         working-directory: platform-cms
         env:

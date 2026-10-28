@@ -5,7 +5,7 @@ import {gunzipSync} from 'node:zlib';
 import {spawnSync} from 'node:child_process';
 import {build} from 'esbuild';
 import {fileURLToPath} from 'node:url';
-import {verifyProductionLive,ProductionLiveError,productionSourceManifest,protectedProductionPaths,productionNoindexPaths,expectedProductionSitemap,expectedProductionRobots} from './verify-production-live.mjs';
+import {verifyProductionLive,ProductionLiveError,productionSourceManifest,protectedProductionPaths,productionNoindexPaths,expectedProductionSitemap,expectedProductionRobots,sourceIndexingProof} from './verify-production-live.mjs';
 import {fixtureProfile,fixturePortable,fixtureSource} from './production-profile-fixture.mjs';
 const root=fileURLToPath(new URL('../',import.meta.url)),privateCanary='PRIVATE-PROVIDER-TOKEN-OR-PAYLOAD';
 const built=await build({stdin:{contents:`export * from './lib/visitor-release';export * from './lib/review-runtime';`,resolveDir:root},bundle:true,write:false,format:'esm',platform:'node',define:{__DERECH_PRODUCTION_BUILD__:'true',__DERECH_PRODUCTION_PROFILE__:JSON.stringify(fixtureProfile)},logLevel:'silent'});
@@ -13,6 +13,8 @@ const production=await import('data:text/javascript;base64,'+Buffer.from(built.o
 const sourcePages=JSON.parse(gunzipSync(readFileSync(new URL('../source-pages/generated-review-pages.json.gz',import.meta.url)))),htmlPages=new Map();
 for(const [path,page]of Object.entries(sourcePages)){const html=production.prepareReviewRuntime(page.shellPrefix+page.sections.map(section=>section.html).join('')+page.shellSuffix);htmlPages.set(path,production.prepareProductionPage(html,new URL(path,fixtureProfile.origin),fixtureProfile));}
 const assets=new Map(['production-guard.js','production-visitor.js'].map(name=>['/'+name,readFileSync(new URL('../public/'+name,import.meta.url))]));
+const expectedPages=sourceIndexingProof.routeCount,expectedSitemap=sourceIndexingProof.expectedSitemapCount,expectedRequests=expectedPages+18;
+assert.ok([37,51].includes(expectedPages));assert.equal(fixtureSource.pages,expectedPages);assert.equal(protectedProductionPaths.length,6);assert.equal(assets.size,2);
 const firstPath=Object.keys(productionSourceManifest)[0],fallbackPath=Object.keys(productionSourceManifest).find(path=>path!=='/thanks/'&&!productionSourceManifest[path].canonical),canonicalPath=Object.keys(productionSourceManifest).find(path=>productionSourceManifest[path].canonical);
 function fixtureResponse(path,forged){
  const headers={'x-derech-release':fixtureProfile.sourceCommit},spec={status:200,headers,body:''};
@@ -20,7 +22,7 @@ function fixtureResponse(path,forged){
  else if(assets.has(path)){headers['content-type']='application/javascript';headers['x-robots-tag']='noindex';spec.body=assets.get(path);}
  else if(path==='/robots.txt'){headers['content-type']='text/plain';spec.body=production.productionRobots(fixtureProfile);}
  else if(path==='/sitemap.xml'){headers['content-type']='application/xml';spec.body=production.productionSitemap();}
- else if(path==='/api/health'){headers['content-type']='application/json';headers['x-robots-tag']='noindex';spec.body=JSON.stringify({status:'ready',mode:'review',contentRelease:fixtureSource.contentRelease,pages:37,database:true,mediaBinding:true});}
+ else if(path==='/api/health'){headers['content-type']='application/json';headers['x-robots-tag']='noindex';spec.body=JSON.stringify({status:'ready',mode:'review',contentRelease:fixtureSource.contentRelease,pages:fixtureSource.pages,database:true,mediaBinding:true});}
  else if(path==='/__production-verifier-unknown__/'){spec.status=404;headers['x-robots-tag']='noindex';}
  else if(protectedProductionPaths.includes(path)){headers['x-robots-tag']='noindex, nofollow';headers['cache-control']='private, no-store';spec.status=path.startsWith('/admin')?302:401;if(spec.status===302)headers.location='/login/?next='+encodeURIComponent(path);}
  else assert.fail('unexpected read path: '+path);
@@ -38,13 +40,13 @@ function harness(mutate=()=>{}){
 }
 const verify=(h,patch={})=>verifyProductionLive({profile:structuredClone(fixtureProfile),config:structuredClone(fixturePortable),fetcher:h.fetcher,...patch});
 async function denied(mutate,reason,path){const h=harness(mutate);await assert.rejects(verify(h),error=>{assert.ok(error instanceof ProductionLiveError);assert.equal(error.message,'Production live verification failed');assert.equal(error.checks.length,1);assert.equal(error.checks[0].reason,reason);if(path)assert.equal(error.checks[0].path,path);const text=JSON.stringify(error.checks);assert.ok(!text.includes(privateCanary));assert.ok(!text.includes(fixturePortable.vars.CMS_OWNER_EMAIL));return true;});return h;}
-await test('actual production transform of all frozen 37 pages passes 55 strictly read-only canonical-origin checks',async()=>{
+await test(`actual production transform of all ${expectedPages} source pages passes ${expectedRequests} strictly read-only canonical-origin checks`,async()=>{
  const originalNoindex=Object.entries(sourcePages).filter(([,page])=>(page.shellPrefix+page.shellSuffix).match(/<meta\b[^>]*>/gi)?.filter(tag=>!tag.includes('data-pilot-policy')).some(tag=>/\bname=["']robots["']/i.test(tag)&&/\bnoindex\b/i.test(tag))).map(([path])=>path).sort();
  assert.deepEqual(originalNoindex,[...productionNoindexPaths].sort(),'exact original source noindex inventory');
- assert.equal(htmlPages.size,37);assert.equal(expectedProductionSitemap().length,32);assert.equal(production.productionRobots(fixtureProfile),expectedProductionRobots());
+ assert.equal(htmlPages.size,expectedPages);assert.equal(expectedProductionSitemap().length,expectedSitemap);assert.equal(production.productionRobots(fixtureProfile),expectedProductionRobots());
  const h=harness(),proof=await verify(h);
- assert.deepEqual({...proof,checks:undefined},{productionLiveVerified:true,sourceCommit:fixtureProfile.sourceCommit,publicPages:37,sitemapUrls:32,productionAssets:2,protectedChecks:12,requests:55,readOnly:true,realOwnerLoginVerified:false,formDeliveryVerified:false,paymentVerified:false,measurementDeliveryVerified:false,checks:undefined});
- assert.equal(h.calls.length,55);assert.equal(h.calls.filter(call=>htmlPages.has(call.path)).length,37);assert.equal(proof.checks.filter(check=>check.kind==='forged_denied').length,6);
+ assert.deepEqual({...proof,checks:undefined},{productionLiveVerified:true,sourceCommit:fixtureProfile.sourceCommit,publicPages:expectedPages,sitemapUrls:expectedSitemap,productionAssets:2,protectedChecks:12,requests:expectedRequests,readOnly:true,realOwnerLoginVerified:false,formDeliveryVerified:false,paymentVerified:false,measurementDeliveryVerified:false,checks:undefined});
+ assert.equal(h.calls.length,expectedRequests);assert.equal(h.calls.filter(call=>htmlPages.has(call.path)).length,expectedPages);assert.equal(proof.checks.filter(check=>check.kind==='forged_denied').length,6);
  for(const {url,options,path,forged}of h.calls){assert.equal(new URL(url).origin,fixtureProfile.origin);assert.equal(new URL(url).search,'');assert.equal(options.method,'GET');assert.equal(options.redirect,'manual');assert.equal(options.credentials,'omit');assert.equal(options.body,undefined);assert.equal(options.headers.authorization,undefined);assert.equal(options.headers.cookie,undefined);if(forged){assert.ok(protectedProductionPaths.includes(path));assert.equal(options.headers['x-platform-authenticated-email'],fixturePortable.vars.CMS_OWNER_EMAIL);}else assert.equal(options.headers['x-platform-authenticated-id'],undefined);}
  assert.ok(!JSON.stringify(proof).includes(fixturePortable.vars.CMS_OWNER_EMAIL));
 });
@@ -57,7 +59,7 @@ await test('source identity and unfollowed responses are mandatory on public and
  for(const path of [firstPath,'/production-visitor.js','/robots.txt','/api/health','/api/tasks/'])await denied(({path:seen,spec})=>{if(seen===path)spec.headers['x-derech-release']='f'.repeat(40);},'source_header_mismatch',path);
  for(const property of ['url','redirected'])await denied(({path,spec})=>{if(path!==firstPath)return;const response=new Response(spec.body,{status:200,headers:spec.headers});Object.defineProperty(response,property,{value:property==='url'?'https://foreign.test/'+privateCanary:true});return response;},'redirect_followed',firstPath);
 });
-await test('only the 33 source-indexable public pages may index; four original noindex pages stay noindex',async()=>{
+await test(`only the ${expectedPages-productionNoindexPaths.length} source-indexable public pages may index; ${productionNoindexPaths.length} source noindex pages stay noindex`,async()=>{
  for(const value of ['noindex','none','NOINDEX, NOFOLLOW'])await denied(({path,spec})=>{if(path===firstPath)spec.headers['x-robots-tag']=value;},'indexing_policy_mismatch',firstPath);
  for(const name of ['robots','googlebot','bingbot'])await denied(({path,spec})=>{if(path===firstPath)spec.body=spec.body.replace(/<head\b[^>]*>/i,match=>match+`<meta name="${name}" content="noindex">`);},'indexing_policy_mismatch',firstPath);
  for(const target of productionNoindexPaths){
@@ -93,7 +95,7 @@ await test('production policy assets are exact source bytes with nonpublic index
  }
  const path='/production-guard.js';await denied(({path:seen,spec})=>{if(seen===path)spec.body=Buffer.alloc(assets.get(path).length+2);},'production_asset_bound',path);
 });
-await test('robots and sitemap must match the fixed 32 canonical public URLs and remain discoverable',async()=>{
+await test(`robots and sitemap must match the pinned ${expectedSitemap} canonical public URLs and remain discoverable`,async()=>{
  for(const path of ['/robots.txt','/sitemap.xml'])await denied(({path:seen,spec})=>{if(seen===path)spec.headers['x-robots-tag']='noindex';},'public_discovery_policy_mismatch',path);
  for(const change of [body=>body.replace('Allow: /','Disallow: /'),body=>body.replace('derech-tkuma.com/sitemap.xml','foreign.test/sitemap.xml'),body=>body.replace('Disallow: /api/\n','')])await denied(({path,spec})=>{if(path==='/robots.txt')spec.body=change(spec.body);},'robots_mismatch','/robots.txt');
  for(const change of [body=>body.replace(/<url>[\s\S]*?<\/url>/,''),body=>body.replace('</urlset>','<url><loc>https://derech-tkuma.com/thanks/</loc></url></urlset>'),body=>body.replace(/<loc>[^<]*<\/loc>/,'<loc>https://foreign.test/</loc>'),body=>body.replace('<urlset','<!DOCTYPE x [<!ENTITY leak "private">]><urlset'),body=>body.replace('http://www.sitemaps.org/schemas/sitemap/0.9','https://foreign.test/schema')])await denied(({path,spec})=>{if(path==='/sitemap.xml')spec.body=change(spec.body);},'sitemap_mismatch','/sitemap.xml');
@@ -103,7 +105,7 @@ await test('robots and sitemap must match the fixed 32 canonical public URLs and
 await test('health is bounded, release-correct and noindex; unknown routes stay noindex 404',async()=>{
  for(const path of ['/api/health','/__production-verifier-unknown__/'])await denied(({path:seen,spec})=>{if(seen===path)delete spec.headers['x-robots-tag'];},'nonpublic_indexing_or_status_mismatch',path);
  await denied(({path,spec})=>{if(path==='/__production-verifier-unknown__/')spec.status=200;},'nonpublic_indexing_or_status_mismatch','/__production-verifier-unknown__/');
- for(const patch of [{status:'degraded'},{contentRelease:'0'.repeat(64)},{pages:36},{database:false},{mediaBinding:false}])await denied(({path,spec})=>{if(path==='/api/health')spec.body=JSON.stringify({...JSON.parse(spec.body),...patch});},'health_invalid','/api/health');
+ for(const patch of [{status:'degraded'},{contentRelease:'0'.repeat(64)},{pages:expectedPages-1},{database:false},{mediaBinding:false}])await denied(({path,spec})=>{if(path==='/api/health')spec.body=JSON.stringify({...JSON.parse(spec.body),...patch});},'health_invalid','/api/health');
  for(const body of [privateCanary,'x'.repeat(16385)])await denied(({path,spec})=>{if(path==='/api/health')spec.body=body;},'health_invalid','/api/health');
 });
 await test('anonymous and forged administrative identity must be denied with noindex and no-store',async()=>{

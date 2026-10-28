@@ -31,7 +31,7 @@ try {
   const productionPage = await GET(new Request(origin + '/'));assert.ok((await productionPage.text()).includes('data-native-contact='));
   for(const [headers, address, status] of [[{ origin: 'https://outside.invalid' }, undefined, 403], [{ 'sec-fetch-site': 'cross-site' }, undefined, 403], [{ 'content-type': 'text/plain' }, undefined, 415], [{}, origin + '/api/contact/?email=synthetic@example.test', 403]]) { response = await POST(request(input, headers, address));assert.equal(response.status, status);assert.equal(count(), 0); }
   response = await POST(request({ ...input, consent: { contact: false, policyVersion: 'source-2026-10-19' } }));assert.equal(response.status, 400);assert.equal(count(), 0);
-  for(const formId of ['1b8a2d8', 'c5cb8a0', 'aa2b8e0']) { response = await POST(request({ ...input, formId }));assert.equal(response.status, 503);assert.equal(count(), 0); }
+  for(const formId of ['c5cb8a0', 'aa2b8e0']) { response = await POST(request({ ...input, formId }));assert.equal(response.status, 503);assert.equal(count(), 0); }
   delete bindings.CONTACT_RETENTION_DAYS;const beforeRetentionReads=reads;response=await POST(request());assert.equal(response.status,503);assert.equal(reads,beforeRetentionReads);assert.equal(count(),0);bindings.CONTACT_RETENTION_DAYS='30';
   response = await POST(request());assert.equal(response.status, 202);const receipt = await response.json();assert.deepEqual(Object.keys(receipt).sort(), ['accepted', 'receipt', 'state']);assert.equal(receipt.state, 'stored_pending_processing');assert.equal(count(), 1);assert.match(response.headers.get('cache-control'), /no-store/);assert.match(response.headers.get('x-robots-tag'), /noindex/);
   for(const privateValue of [input.fullName, input.phone, input.email]) assert.ok(!JSON.stringify(receipt).includes(privateValue));
@@ -41,7 +41,7 @@ try {
   response = await POST(request({ ...input, fullName: 'שינוי אחר' }));assert.equal(response.status, 409);assert.deepEqual(await response.json(), { accepted: false, code: 'idempotency_conflict' });assert.equal(count(), 1);
   response = await POST(request({ ...input, formId: 'af355f0', idempotencyKey: '30000000-0000-4000-8000-000000000003' }));assert.equal(response.status, 202);assert.equal(count(), 2);
   // New leads are capped before storage; an existing receipt remains replayable.
-  for(let i=0;i<3;i++){response=await POST(request({...input,idempotencyKey:crypto.randomUUID()}));assert.equal(response.status,202);}assert.equal(count(),5);
+  for(let i=0;i<3;i++){const value={...input,idempotencyKey:crypto.randomUUID(),...(i===0?{formId:'1b8a2d8',message:'הודעה פרטית\nנוספת'}:{})};response=await POST(request(value));assert.equal(response.status,202);const body=await response.text();assert.ok(!body.includes('הודעה פרטית'));if(i===0){const stored=sqlite.prepare("SELECT value FROM cms_settings WHERE key LIKE ?").get('%'+value.idempotencyKey);assert.equal(JSON.parse(stored.value).fields.message,value.message);}}assert.equal(count(),5);
   response=await POST(request({...input,idempotencyKey:crypto.randomUUID()}));assert.equal(response.status,429);assert.equal(response.headers.get('retry-after'),'60');assert.equal(count(),5);
   response=await POST(request());assert.equal(response.status,202);assert.deepEqual(await response.json(),receipt);assert.equal(count(),5);
   Object.assign(bindings, { CMS_SITE_ID: 'other' });response = await POST(request({ ...input, idempotencyKey: '40000000-0000-4000-8000-000000000004' }));assert.equal(response.status, 503);assert.equal(count(), 5);
