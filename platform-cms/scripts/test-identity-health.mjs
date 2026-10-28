@@ -29,7 +29,7 @@ const logs=[],originalWarn=console.warn,originalError=console.error;
 console.warn=(...values)=>logs.push(values);console.error=(...values)=>logs.push(values);
 try{
  const f=fixture();safe(await f.probe(config()));assert.equal(f.requests.length,1);
- const request=f.requests[0];assert.equal(request.input,address);assert.equal(request.init.method,'GET');assert.equal(request.init.redirect,'error');assert.equal(request.init.credentials,'omit');assert.equal(request.init.cache,'no-store');assert.equal(request.init.referrerPolicy,'no-referrer');assert.deepEqual(request.init.headers,{accept:'application/json',apikey:keyA});assert.equal(request.init.body,undefined);assert.equal(f.timers[0].milliseconds,2500);assert.equal(f.timers[0].cleared,true);
+ const request=f.requests[0];assert.equal(request.input,address);assert.equal(request.init.method,'GET');assert.equal(request.init.redirect,'manual');assert.equal(request.init.credentials,'omit');assert.equal(request.init.cache,'no-store');assert.equal(request.init.referrerPolicy,'no-referrer');assert.deepEqual(request.init.headers,{accept:'application/json',apikey:keyA});assert.equal(request.init.body,undefined);assert.equal(f.timers[0].milliseconds,2500);assert.equal(f.timers[0].cleared,true);
  const first=await f.probe(config());first.identityReady=false;f.time=59999;assert.equal((await f.probe(config())).identityReady,true);assert.equal(f.requests.length,1,'healthy cache has bounded60s lifetime and cannot be mutated by caller');
  f.time=60000;f.handler=()=>{throw new TypeError(privateCanary+' DNS '+address+' '+keyA);};assert.equal(safe(await f.probe(config())).identityReady,false);assert.equal(f.requests.length,2,'expired healthy result is not served during failed refresh');
  f.time=64999;assert.equal((await f.probe(config())).identityReady,false);assert.equal(f.requests.length,2,'failed cache is only5s');f.time=65000;f.handler=()=>response();assert.equal((await f.probe(config())).identityReady,true);assert.equal(f.requests.length,3);
@@ -70,3 +70,16 @@ try{
  Object.assign(env,config(keyB));globalThis.fetch=async()=>{calls++;throw Error(privateCanary);};http=await GET();body=await http.json();assert.equal(http.status,503);assert.equal(body.status,'starting');assert.equal(body.identityReady,false);assert.equal(body.identityState,'unavailable');assert.equal(body.database,true);assert.equal(body.mediaBinding,true);assert.match(http.headers.get('cache-control'),/no-store/);assert.match(http.headers.get('x-robots-tag'),/noindex/);for(const value of [privateCanary,address,keyA,keyB])assert.ok(!JSON.stringify(body).includes(value));
 }finally{globalThis.fetch=savedFetch;delete globalThis.__identityHealthRoute;}
 console.log('PASS identity health: lazy/nonSupabase zero-I/O, exact approved GET/apikey/no JWT, healthy JSON validation/body cap/hard deadline, DNS/status/redirect/body failures,60s/5s cache/coalescing/expiry/keyrotation, no secret logs/output, actual health route503 while existing DB/media/body contract remains intact. Provider fixtures only; no network.');
+
+// Exercise actual edge fetch semantics, not just injected Node transports.
+{
+ const {Miniflare,Log,LogLevel}=await import('miniflare');
+ const edge=await build({stdin:{contents:`import {createIdentityHealthProbe} from './lib/identity-health';export default {async fetch(){return Response.json(await createIdentityHealthProbe()({PLATFORM_AUTH_MODE:'supabase',PLATFORM_AUTH_SUPABASE_URL:'https://uawcxvkekfqxosfblpxr.supabase.co',PLATFORM_AUTH_SUPABASE_PUBLISHABLE_KEY:'sb_publishable_synthetic_fixture_only_1234'}))}}`,resolveDir:root,loader:'ts'},bundle:true,write:false,format:'esm',platform:'neutral',logLevel:'silent'});
+ let count=0,mode='ready';
+ const runtime=new Miniflare({modules:true,script:edge.outputFiles[0].text,compatibilityDate:'2026-05-15',compatibilityFlags:['nodejs_compat'],log:new Log(LogLevel.ERROR),outboundService:async request=>{
+  count++;assert.equal(request.url,'https://uawcxvkekfqxosfblpxr.supabase.co/auth/v1/health');assert.equal(request.method,'GET');assert.equal(request.headers.get('apikey'),'sb_publishable_synthetic_fixture_only_1234');assert.equal(request.headers.get('authorization'),null);
+  return mode==='ready'?Response.json({version:'v2.197.0',name:'GoTrue',description:'GoTrue is a user registration and authentication API'}):mode==='redirect'?new Response(null,{status:302,headers:{location:'https://outside.invalid/never-follow'}}):Response.json({message:'fixture unavailable'},{status:503});
+ }});
+ try{for(const [index,state]of ['ready','redirect','unavailable'].entries()){mode=state;const result=await(await runtime.dispatchFetch('https://local-fixture.invalid/')).json();assert.equal(result.identityReady,state==='ready');assert.equal(count,index+1,'redirect must not trigger a second provider request');}}finally{await runtime.dispose();}
+ console.log('PASS actual Workerd default fetch, manual redirects rejected without following, healthy and503 dependency states; synthetic outbound only');
+}

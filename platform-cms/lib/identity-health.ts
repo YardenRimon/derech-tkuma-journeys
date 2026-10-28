@@ -45,9 +45,9 @@ export function createIdentityHealthProbe(options: ProbeOptions = {}) {
       try {
         // Fetch itself is obtained lazily; importing or using legacy/mock mode
         // cannot even invoke a supplied transport or look up global fetch.
-        const fetcher = options.fetchImpl ?? globalThis.fetch;
+        const fetcher = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
         const address = PLATFORM_AUTH_PROJECT_URL + HEALTH_PATH;
-        const response = await fetcher(address, { method: 'GET', redirect: 'error', credentials: 'omit', cache: 'no-store', referrerPolicy: 'no-referrer', signal: controller.signal, headers: { accept: 'application/json', apikey: key } });
+        const response = await fetcher(address, { method: 'GET', redirect: 'manual', credentials: 'omit', cache: 'no-store', referrerPolicy: 'no-referrer', signal: controller.signal, headers: { accept: 'application/json', apikey: key } });
         if (controller.signal.aborted) { void response.body?.cancel().catch(() => {});return false; }
         if (response.status !== 200 || response.redirected || response.url && response.url !== address || !/^application\/json(?:\s*;|$)/i.test(response.headers.get('content-type') ?? '')) { void response.body?.cancel().catch(() => {});return false; }
         const length = response.headers.get('content-length');
