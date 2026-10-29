@@ -10,6 +10,7 @@ const links = [
   { href: "/admin", label: "עמודי האתר", icon: FilePenLine },
   { href: "/admin/collections", label: "סיורים ומועדים", icon: MapPinned },
   { href: "/admin/tasks", label: "שאלות ומשימות", icon: ClipboardList },
+  { href: "/admin/submissions", label: "דירוגים והצעות מחיר", icon: ClipboardList, admin: true },
   { href: "/admin/reports", label: "דוחות והיסטוריה", icon: ChartNoAxesCombined, admin: true },
   { href: "/admin/execution", label: "ביצוע ושחזור", icon: History, admin: true },
   { href: "/admin/users", label: "משתמשים והרשאות", icon: Users, admin: true },

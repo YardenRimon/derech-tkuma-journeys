@@ -4,7 +4,7 @@ import {
   requireSameOrigin, validateDraft, compatibleStoredDraft,
 } from "@/lib/cms";
 import { authorizeCmsUser } from "@/lib/access";
-import { managedCollectionFields } from "@/lib/collection-projection";
+import { managedPageFields as managedCollectionFields } from "@/lib/product-projection";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";

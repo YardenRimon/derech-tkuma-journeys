@@ -30,7 +30,7 @@ function fixture(){
 let calls=[],mode='ack',releaseProvider;
 const server=createServer(async(req,res)=>{let raw='';for await(const chunk of req)raw+=chunk;calls.push({method:req.method,headers:req.headers,body:JSON.parse(raw)});if(mode==='hold')await new Promise(resolve=>{releaseProvider=resolve;});res.writeHead(202,{'content-type':'application/json'});if(mode==='timeout'){res.write('{');return;}res.end(mode==='bad'?'{}':JSON.stringify({state:'accepted',receipt:'synthetic-provider-receipt'}));});
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const provider='http://127.0.0.1:'+server.address().port;
-const transport=async(url,options)=>{assert.equal(url,contract.endpoint,'only pinned fixture route reaches loopback adapter');assert.equal(options.redirect,'error');assert.equal(options.credentials,'omit');return fetch(provider,options);};
+const transport=async(url,options)=>{assert.equal(url,contract.endpoint,'only pinned fixture route reaches loopback adapter');assert.equal(options.redirect,'manual');assert.equal(options.credentials,'omit');return fetch(provider,options);};
 const clean=value=>{const raw=JSON.stringify(value);for(const privateValue of ['synthetic@example.test','0501234567','בדיקה סינתטית',contract.endpoint,configuration().CONTACT_DELIVERY_SECRET])assert.ok(!raw.includes(privateValue),'only fixed states/opaque receipt leave hook');return value;};
 try{
  // Disabled/invalid active configuration has zero DB, bucket or provider work.

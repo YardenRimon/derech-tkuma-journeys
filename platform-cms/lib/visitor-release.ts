@@ -6,7 +6,7 @@ import {validateProductionProfile,productionOrigin,productionAlias,canonicalProd
 declare const __DERECH_PRODUCTION_BUILD__:boolean;
 declare const __DERECH_PRODUCTION_PROFILE__:unknown;
 export type ProductionMeasurement={verified:true;strategy:'gtm';revision:string;containerSha256:string;ga4Id:'G-DV3E8J77EX';gtmId:'GTM-5N7NPTL4';metaPixelId:'766863783155971';basicConsentOnly:true;purposeTagsVerified:true;enhancedMeasurementDisabled:true;noCustomHtml:true;sandboxAccepted:true;noPersonalDataVariables:true};
-export type ProductionPaymentEvidence={provider:'grow';environment:'production';currency:'ILS';acceptanceHash:string;currencyEvidenceHash:string;acknowledgmentEvidenceHash:string;termsHash:string;callbackVerification:'stored-process-token-and-approved-readback/v1';acknowledgmentContract:'full-documented-form/v1'};
+export type ProductionPaymentEvidence={provider:'grow';environment:'production';currency:'ILS';acceptanceHash:string;currencyEvidenceHash:string;acknowledgmentEvidenceHash:string;termsHash:string;callbackVerification:'stored-process-token-and-approved-readback/v1';acknowledgmentContract:'full-documented-form/v1'|'installed-wallet-23/v1'};
 export type ProductionProfile={schema:1;stage:'production';origin:string;aliasOrigin:string;sourceRelease:string;sourceCommit:string;approvalReceiptHash:string;gates:Record<string,true>;resources:{accountId:string;databaseId:string;databaseName:string;bucketName:string};contactReady:boolean;paymentsReady:boolean;paymentEvidence:ProductionPaymentEvidence|null;measurement:ProductionMeasurement|null};
 export function productionRelease(url:URL):ProductionProfile|null{
  if(!sourceIndexingValid)return null;

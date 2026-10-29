@@ -72,4 +72,37 @@ const newPath='/maslulim/מסלול-חדש/';const changedLinks=project(html('/�
 const imageTour=tours.find(x=>x.content.image);assert.ok(imageTour);const imageOutput=project(html('/המסלולים/'),'/המסלולים/',[{kind:'tour',id:imageTour.id,published:{...imageTour.content,image:'/media/new.png',imageAlt:'תמונה חדשה'},publishedVersion:1}]);assert.ok(imageOutput.includes('src="/media/new.png"'));assert.ok(imageOutput.includes('alt="תמונה חדשה"'));
 assert.ok(imageOutput.includes('background-image:url(&quot;/media/new.png&quot;)'),'published image must update the main source card background too');
 const tourCard=data.bindings.find(x=>x.id===imageTour.id&&x.field==='visibility');const tourWithdrawn=project(html('/המסלולים/'),'/המסלולים/',[{kind:'tour',id:imageTour.id,published:null,publishedVersion:1}]);assert.ok(!tourWithdrawn.includes(tourCard.cardClass));assert.ok(tourWithdrawn.includes('מסלול עוז מול תופת'),'withdrawing one route must preserve another route card');
-console.log('PASS source-derived collections: 4 tours/'+occurrences.length+' exact dated prices, source provenance, date-only/null unknowns, strict fields/path/time validation, unchanged source DOM, published-only text/price/image/link overlay, withdrawal and managed authority map.');
+
+// Parent withdrawal must be the same public truth for source list cards and
+// the independently protected product/cart projections. No storage is changed.
+const parent=tours.find(row=>row.id==='open-tour');assert.ok(parent);
+const parentChildren=occurrences.filter(row=>row.content.tourId===parent.id);assert.ok(parentChildren.length);
+const childIds=new Set(parentChildren.map(row=>row.id));
+const parentWithdrawal=published.map(row=>row.kind==='tour'&&row.id===parent.id?{...row,published:null,publishedVersion:2,draft:parent.content}:row);
+const explicitChildren=parentWithdrawal.map(row=>row.kind==='occurrence'&&childIds.has(row.id)?{...row,published:null,publishedVersion:2}:row);
+const deepFreeze=value=>{if(value&&typeof value==='object'){for(const child of Object.values(value))deepFreeze(child);Object.freeze(value);}return value;};
+const immutable=deepFreeze(structuredClone(parentWithdrawal)),beforeParent=JSON.stringify(immutable);
+const draftDelete=published.map(row=>row.kind==='tour'&&row.id===parent.id?{...row,draft:null}:row);
+const uninitialized=published.map(row=>row.kind==='tour'&&row.id===parent.id?{...row,published:null,publishedVersion:0,draft:null}:row);
+const missingParent=published.filter(row=>row.kind!=='tour'||row.id!==parent.id);
+const parentOnly=[{kind:'tour',id:parent.id,published:null,publishedVersion:2}];
+const sourceListPages=[...new Set(data.bindings.filter(binding=>binding.kind==='occurrence').map(binding=>binding.page))];assert.ok(sourceListPages.includes('/סיורים/'));
+const purchaseIds=value=>[...value.matchAll(/<a\b[^>]*\bhref="([^"]*)"/g)].flatMap(match=>{try{const href=match[1].replace(/&(?:amp|#0*38);/g,'&');const id=new URL(href,'https://derech-tkuma.com').searchParams.get('add-to-cart');return id?[id]:[];}catch{return [];}});
+for(const slug of Object.keys(pages)){
+ const original=html(slug),expected=project(original,slug,explicitChildren),actual=project(original,slug,immutable);
+ assert.equal(actual,expected,'parent withdrawal matches explicit child-card removal on '+slug);
+ assert.equal(project(original,slug,draftDelete),original,'draft parent deletion does not withdraw '+slug);
+ assert.equal(project(original,slug,uninitialized),original,'uninitialized parent does not withdraw '+slug);
+ assert.equal(project(original,slug,missingParent),original,'missing parent does not withdraw '+slug);
+ assert.equal(project(original,slug,parentOnly),expected,'explicit parent withdrawal alone governs frozen source children on '+slug);
+}
+assert.equal(JSON.stringify(immutable),beforeParent,'projection never mutates private record/history/draft input');
+for(const slug of sourceListPages){const output=project(html(slug),slug,immutable),ids=purchaseIds(output);for(const child of parentChildren){assert.ok(!output.includes('e-loop-item-'+child.provenance.productId),'withdrawn child source card removed');assert.ok(!ids.includes(child.provenance.productId),'withdrawn child source purchase anchor removed');}}
+const unrelated=tours.find(row=>row.id!==parent.id);assert.ok(unrelated);
+const unrelatedWithdrawal=published.map(row=>row.kind==='tour'&&row.id===unrelated.id?{...row,published:null,publishedVersion:2}:row);
+assert.equal(project(html('/סיורים/'),'/סיורים/',unrelatedWithdrawal),html('/סיורים/'),'unrelated tour withdrawal preserves existing child cards exactly');
+const reassigned=parentChildren[0],reassignedRows=parentWithdrawal.map(row=>row.kind==='occurrence'&&row.id===reassigned.id?{...row,published:{...row.published,tourId:unrelated.id},draft:{...row.published,tourId:parent.id}}:row);
+const reassignedOutput=project(html('/סיורים/'),'/סיורים/',reassignedRows);assert.ok(purchaseIds(reassignedOutput).includes(reassigned.provenance.productId),'published child reassignment to another tour stays purchasable');for(const child of parentChildren.filter(row=>row.id!==reassigned.id))assert.ok(!purchaseIds(reassignedOutput).includes(child.provenance.productId));
+const hostileDraft=parentWithdrawal.map(row=>{const copy={...row};Object.defineProperty(copy,'draft',{get(){throw new Error('projection read a private draft');}});return copy;});assert.equal(project(html('/סיורים/'),'/סיורים/',hostileDraft),project(html('/סיורים/'),'/סיורים/',explicitChildren),'draft values are never inspected');
+
+console.log('PASS source-derived collections: published parent withdrawal consistently hides child source cards/CTAs without draft/input mutation; 4 tours/'+occurrences.length+' exact dated prices, source provenance, date-only/null unknowns, strict fields/path/time validation, unchanged source DOM, published-only text/price/image/link overlay, withdrawal and managed authority map.');

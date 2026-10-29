@@ -51,7 +51,7 @@ export class GrowGateway implements PaymentGateway{
   const controller=new AbortController(),started=performance.now();let timer:ReturnType<typeof setTimeout>|undefined;
   const expired=new Promise<never>((_,reject)=>{timer=setTimeout(()=>{controller.abort();reject(new PaymentError(503,'payment_provider_transport_uncertain'));},8000);});
   try{
-   const response=await Promise.race([this.transport(this.base+method,{method:'POST',body,headers:{accept:'application/json'},redirect:'error',credentials:'omit',cache:'no-store',signal:controller.signal}),expired]);
+   const response=await Promise.race([this.transport(this.base+method,{method:'POST',body,headers:{accept:'application/json'},redirect:'manual',credentials:'omit',cache:'no-store',signal:controller.signal}),expired]);
    paymentRequire(response.status===200&&response.url===this.base+method&&response.headers.get('content-type')?.split(';')[0].trim().toLowerCase()==='application/json','payment_provider_response_invalid',503);
    const bytes=await Promise.race([paymentReadBytes(response.body,65536,Math.max(1,8000-(performance.now()-started))),expired]);let result;try{result=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes));}catch{throw new PaymentError(503,'payment_provider_response_invalid');}
    paymentRequire(result&&typeof result==='object'&&!Array.isArray(result)&&(result.status===1||result.status==='1')&&result.err===''&&(method==='approveTransaction'?result.data===''&&result.message==='':result.data&&typeof result.data==='object'&&!Array.isArray(result.data)),'payment_provider_response_invalid',503);return (method==='approveTransaction'?result:result.data) as Record<string,unknown>;

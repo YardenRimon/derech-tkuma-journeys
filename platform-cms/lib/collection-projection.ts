@@ -1,5 +1,5 @@
 import current from './current-collections.json' with { type: 'json' };
-import { validateContent, type Kind, type Tour, type Record as CollectionRecord } from './collection-core';
+import { validateContent, type Kind, type Tour, type Occurrence, type Record as CollectionRecord } from './collection-core';
 /** Source bindings are deployment-owned. No caller-supplied selectors or HTML are executed. */
 export type PublishedProjectionRecord = Pick<CollectionRecord,'kind'|'id'|'published'|'publishedVersion'>;
 export type SourceBinding = {page:string;kind:Kind;id:string;field:string;fieldId?:string;selector:string;prefix?:string;currencyFieldId?:string;sourceLiteral?:string;cardClass?:string;backgroundClass?:string};
@@ -31,12 +31,20 @@ function nodes(html:string):Node[]{
  */
 export function projectPublishedCollections(html:string,page:string,records:readonly PublishedProjectionRecord[]):string {
  const bindings=currentCollectionBindings.filter(x=>x.page===page);if(!bindings.length)return html;
- const active=records.filter(x=>x.publishedVersion>0),tree=nodes(html),edits:{start:number;end:number;value:string}[]=[];
+ const active=records.filter(x=>x.publishedVersion>0),withdrawnTours=new Map(active.filter(x=>x.kind==='tour'&&x.published===null).map(x=>[x.id,x.publishedVersion])),tree=nodes(html),edits:{start:number;end:number;value:string}[]=[];
  const add=(start:number,end:number,value:string)=>{if(html.slice(start,end)!==value)edits.push({start,end,value});};
  const byField=(id:string)=>tree.find(x=>x.attrs['data-edit-id']===id||x.attrs['data-image-id']===id);
  for(const binding of bindings){
-  const record=active.find(x=>x.kind===binding.kind&&x.id===binding.id);if(!record)continue;
+  let record=active.find(x=>x.kind===binding.kind&&x.id===binding.id);
   const seed=current.records.find(x=>x.kind===binding.kind&&x.id===binding.id)!;
+  if(binding.kind==='occurrence'&&withdrawnTours.size){
+   // Public linkage comes from the published child, or the frozen source card
+   // when no published child exists. Only an explicit published parent
+   // withdrawal creates this transient overlay; drafts and inputs stay intact.
+   const parentId=((record?.published??seed.content) as Occurrence).tourId,parentVersion=withdrawnTours.get(parentId);
+   if(parentVersion!==undefined)record={kind:'occurrence',id:binding.id,published:null,publishedVersion:record?.publishedVersion??parentVersion};
+  }
+  if(!record)continue;
   if(record.published===null){if(binding.cardClass)for(const card of tree.filter(x=>(x.attrs.class||'').split(/\s+/).includes(binding.cardClass!)))add(card.start,card.end,'');continue;}
   const content=validateContent(binding.kind,record.published) as unknown as {[key:string]:unknown},initial=seed.content as {[key:string]:unknown};
   if(binding.field==='visibility'||(content[binding.field]===initial[binding.field]&&(binding.field!=='image'||content.imageAlt===initial.imageAlt)))continue;

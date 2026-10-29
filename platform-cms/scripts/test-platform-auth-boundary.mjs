@@ -25,3 +25,6 @@ const optionalInvalid=await platformAuthBoundary(new Request(origin+'/api/users/
 const spoofedPolicy=await platformAuthBoundary(new Request(origin+'/admin/?requireMfa=false',{headers:{'x-platform-authenticated-aal':'aal2'}}),async()=>({identity:{...identity,aal:'aal1'},cookiesToSet:[]}));assert.equal(spoofedPolicy.response.status,302);assert.match(spoofedPolicy.response.headers.get('location'),/mfa=required/);
 for(const path of ['/api/machine/execution/','/api/backup/','/api/auth/session/']){const bypass=await platformAuthBoundary(new Request(origin+path),async()=>{throw new Error('browser verifier must not intercept machine/auth routes');});assert(!bypass.response);}
 console.log('Shared auth Worker boundary: inbound identity forgery stripped, trusted MFA identity only, no downgrade, refreshed cookies preserved, binary body intact, API/page fail-closed, machine/backup unchanged.');
+
+for(const path of ['/api/submissions/manage','/api/submissions/manage/'])assert.equal(isCmsBrowserPath(path),true);
+for(const path of ['/api/submissions','/api/submissions/','/api/submissions/manage/forged'])assert.equal(isCmsBrowserPath(path),false);

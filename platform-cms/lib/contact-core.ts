@@ -1,3 +1,4 @@
+import type {CommonSubmissionStored} from './submission-core';
 /** Server-only contact intake. Captured configuration is not proof of delivery. */
 export const CONTACT_POLICY = 'source-2026-10-19';
 export const CONTACT_FORMS = {
@@ -15,6 +16,10 @@ export type ContactStored=ContactRecord|ContactTombstone;
 export type ContactDeletionMarker={schema:1;scope:ContactScope;key:string;erasedAt:string;reason:'expired'|'requested'};
 export interface ContactPrivacy{check(scope:ContactScope):Promise<void>;get(scope:ContactScope,key:string):Promise<ContactDeletionMarker|null>;ensure(marker:ContactDeletionMarker):Promise<ContactDeletionMarker>}
 export interface ContactStore {
+ // Optional reader-first bridge. Lead APIs still accept schema1/2 only.
+ getCommon?(scope:ContactScope,key:string):Promise<CommonSubmissionStored|null>;
+ casCommon?(previous:CommonSubmissionStored,next:CommonSubmissionStored):Promise<boolean>;
+ scanCommon?(scope:ContactScope,after:string|null,limit:number):Promise<CommonSubmissionStored[]>;
  get(scope:ContactScope,key:string):Promise<ContactStored|null>;
  insert(record:ContactRecord):Promise<boolean>;
  cas(previous:ContactStored,next:ContactStored):Promise<boolean>;
@@ -65,10 +70,12 @@ export class Contacts{
   const value=record.retention?.expiresAt??new Date(Date.parse(record.createdAt)+this.days*86400000).toISOString();
   if(!Number.isFinite(Date.parse(value)))fail(503,'contact_unavailable');return Math.min(Date.parse(value),Date.parse(record.createdAt)+this.days*86400000);
  }
+ private getCommon(scope:ContactScope,key:string){return this.store.getCommon?this.store.getCommon(scope,key):this.store.get(scope,key);}
+ private casCommon(previous:CommonSubmissionStored,next:CommonSubmissionStored){if(this.store.casCommon)return this.store.casCommon(previous,next);if(previous.schema===3||next.schema===3)fail(503,'submission_storage_unavailable');return this.store.cas(previous,next);}
  private async redactMarker(scope:ContactScope,key:string,marker:ContactDeletionMarker){
-  const previous=await this.store.get(scope,key);if(!previous||previous.schema===2)return;
+  const previous=await this.getCommon(scope,key);if(!previous||previous.schema===2)return;
   const next:ContactTombstone={schema:2,scope:{...scope},key,revision:previous.revision+1,erasedAt:marker.erasedAt,reason:marker.reason,actorId:null};
-  if(!await this.store.cas(previous,next))fail(409,'contact_revision_conflict');
+  if(!await this.casCommon(previous,next))fail(409,'contact_revision_conflict');
  }
  private async assertUnmarked(scope:ContactScope,key:string){
   const marker=await this.privacy.get(scope,key);
@@ -76,19 +83,20 @@ export class Contacts{
  }
  async reconcile(scope:ContactScope,limit=100,after:string|null=null,now=new Date()){
   contactScope(scope);if(!Number.isSafeInteger(limit)||limit<1||limit>100||after!==null&&!uuid.test(after))fail(400,'invalid_submission');
-  await this.privacy.check(scope);const rows=await this.store.scan(scope,after,limit);let redacted=0;
+  await this.privacy.check(scope);const rows=this.store.scanCommon?await this.store.scanCommon(scope,after,limit):await this.store.scan(scope,after,limit);let redacted=0;
   for(const record of rows){
    if(record.schema===2){await this.privacy.ensure({schema:1,scope:{...scope},key:record.key,erasedAt:record.erasedAt,reason:record.reason});continue;}
    const marker=await this.privacy.get(scope,record.key);
    if(marker){await this.redactMarker(scope,record.key,marker);redacted++;}
-   else if(this.expiresAt(record)<=now.getTime()){await this.erase(scope,record.key,record.revision,'expired',now);redacted++;}
+   else if(record.schema===1&&this.expiresAt(record)<=now.getTime()){await this.erase(scope,record.key,record.revision,'expired',now);redacted++;}
   }
   return{scanned:rows.length,redacted,nextCursor:rows.length===limit?rows.at(-1)!.key:null};
  }
  private async live(scope:ContactScope,key:string,now:Date){
-  contactScope(scope);if(!uuid.test(key))fail(400,'invalid_idempotency_key');key=key.toLowerCase();await this.assertUnmarked(scope,key);const record=await this.store.get(scope,key);
+  contactScope(scope);if(!uuid.test(key))fail(400,'invalid_idempotency_key');key=key.toLowerCase();await this.assertUnmarked(scope,key);const record=await this.getCommon(scope,key);
   if(!record)fail(404,'not_found');
   if(record.schema===2){await this.privacy.ensure({schema:1,scope:{...scope},key,erasedAt:record.erasedAt,reason:record.reason});fail(410,'submission_erased');}
+  if(record.schema!==1)fail(409,'submission_workflow_mismatch');
   if(this.expiresAt(record)<=now.getTime()){
    await this.erase(scope,key,record.revision,'expired',now);
    fail(410,'submission_erased');
@@ -104,7 +112,7 @@ export class Contacts{
    const previous=await this.live(scope,input.idempotencyKey,now);
    if(previous.fingerprint!==fingerprint)fail(409,'idempotency_conflict');return this.publicReceipt(previous);
   };
-  if(await this.store.get(scope,input.idempotencyKey))return replay();
+  if(await this.getCommon(scope,input.idempotencyKey))return replay();
   // Runs before the INSERT. A rejection cannot leave a durable lead.
   if(reserveNew)await reserveNew();
   const at=now.toISOString(),record:ContactRecord={schema:1,scope:{...scope},key:input.idempotencyKey,receipt:crypto.randomUUID(),fingerprint,source,fields,consent:{...input.consent,receivedAt:at},createdAt:at,retention:{days:this.days,expiresAt:new Date(now.getTime()+this.days*86400000).toISOString()},revision:1,outbox:{state:'pending_routing',attemptToken:null,contractId:null,receiptHash:null}};
@@ -116,15 +124,16 @@ export class Contacts{
   await this.store.auditRead(record,now.toISOString());await this.assertUnmarked(scope,record.key);return record;
  }
  async erase(scope:ContactScope,key:string,expectedRevision:number,reason:'expired'|'requested',now=new Date(),actorId:string|null=null){
-  contactScope(scope);if(!uuid.test(key))fail(400,'invalid_idempotency_key');key=key.toLowerCase();const previous=await this.store.get(scope,key);if(!previous)fail(404,'not_found');
+  contactScope(scope);if(!uuid.test(key))fail(400,'invalid_idempotency_key');key=key.toLowerCase();const previous=await this.getCommon(scope,key);if(!previous)fail(404,'not_found');
   if(previous.schema===2){await this.privacy.ensure({schema:1,scope:{...scope},key,erasedAt:previous.erasedAt,reason:previous.reason});return previous;}
   if(previous.revision!==expectedRevision)fail(409,'contact_revision_conflict');
-  if(reason==='expired'&&this.expiresAt(previous)>now.getTime())fail(409,'contact_revision_conflict');
+  if(reason==='expired'&&previous.schema!==1)fail(409,'submission_expiry_requires_policy');
+  if(reason==='expired'&&previous.schema===1&&this.expiresAt(previous)>now.getTime())fail(409,'contact_revision_conflict');
   // No fields, consent, receipt, payload fingerprint or delivery tokens survive.
   // The opaque UUID is retained so a late retry cannot resurrect deleted PII.
   const marker=await this.privacy.ensure({schema:1,scope:{...scope},key,erasedAt:now.toISOString(),reason});
   const next:ContactTombstone={schema:2,scope:{...scope},key,revision:previous.revision+1,erasedAt:marker.erasedAt,reason:marker.reason,actorId};
-  if(!await this.store.cas(previous,next))fail(409,'contact_revision_conflict');return next;
+  if(!await this.casCommon(previous,next))fail(409,'contact_revision_conflict');return next;
  }
  async expire(scope:ContactScope,limit=100,now=new Date()){
   contactScope(scope);if(!Number.isSafeInteger(limit)||limit<1||limit>100)fail(400,'invalid_submission');

@@ -102,7 +102,9 @@
     const definition = state.base.fields[id];
     if(state.managedFields?.[id]){
       const managed=state.managedFields[id];
-      const note=document.createElement('p');note.textContent='השדה מנוהל עם נתוני הסיור והמועד: '+managed.label;
+      const note=document.createElement('p');
+      if(managed.readOnly===true||managed.kind==='catalog'){note.textContent='השדה מנוהל יחד עם מחיר המוצר ואינו ניתן לעריכה בעורך העמוד: '+managed.label;panel.append(note);return;}
+      note.textContent='השדה מנוהל עם נתוני הסיור והמועד: '+managed.label;
       const link=document.createElement('a');link.href='/admin/collections?kind='+encodeURIComponent(managed.kind)+'&id='+encodeURIComponent(managed.id);link.textContent='עריכת הסיור או המועד';
       panel.append(note,link);return;
     }

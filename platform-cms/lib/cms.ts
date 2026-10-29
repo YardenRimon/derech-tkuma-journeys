@@ -1,8 +1,9 @@
 import { env } from "cloudflare:workers";
 import { CmsError, assertIsolatedD1Scope } from "@/lib/access";
 import generatedPages from "@/lib/generated-pages.json";
-import { managedCollectionFields, projectPublishedCollections } from "@/lib/collection-projection";
-import { D1Collections } from "@/lib/collection-d1";
+import { projectPublishedCollections } from "@/lib/collection-projection";
+import { managedPageFields as managedCollectionFields, projectPublishedProducts } from "@/lib/product-projection";
+import { loadPublishedSourceCollections } from "@/lib/published-source-d1";
 import { siteScope } from "@/lib/site-scope";
 import visualResources from "@/lib/visual-resource-map.json";
 import { prepareReviewRuntime } from "@/lib/review-runtime";
@@ -231,10 +232,10 @@ export async function getPublishedPage(slug: string): Promise<string> {
 
 export async function applyPublishedCollections(html:string,slug:string):Promise<string>{
  if(!Object.keys(managedCollectionFields(slug)).length)return html;
- const store=new D1Collections(getD1()),scope=siteScope();
- // Lists include explicit withdrawals. Projection never reads their draft values.
- const rows=(await Promise.all([store.list(scope,'tour'),store.list(scope,'occurrence')])).flat();
- return projectPublishedCollections(html,slug,rows);
+ // Read exact deployment identities, including withdrawals, without private
+ // drafts or the administrative list's recent-record limit.
+ const rows=await loadPublishedSourceCollections(getD1(),siteScope());
+ return projectPublishedProducts(projectPublishedCollections(html,slug,rows),slug,rows);
 }
 
 export function jsonError(error: unknown): Response {

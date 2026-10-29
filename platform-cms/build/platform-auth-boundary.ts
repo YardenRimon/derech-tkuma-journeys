@@ -8,7 +8,7 @@ export function stripIdentityHeaders(request: Request): Request {
   return new Request(request, { headers });
 }
 export function isCmsBrowserPath(pathname: string): boolean {
-  return /^\/admin(?:\/|$)/.test(pathname) || /^\/api\/(?:cms|users|collections|tasks|reports|execution)(?:\/|$)/.test(pathname) || /^\/api\/contact\/manage\/?$/.test(pathname);
+  return /^\/admin(?:\/|$)/.test(pathname) || /^\/api\/(?:cms|users|collections|tasks|reports|execution)(?:\/|$)/.test(pathname) || /^\/api\/(?:contact|submissions)\/manage\/?$/.test(pathname);
 }
 type VerifiedIdentity = { userId: string; email: string; displayName: string; fullName: string | null; aal: 'aal1' | 'aal2' };
 type AuthResult = { identity: VerifiedIdentity; cookiesToSet: string[] };

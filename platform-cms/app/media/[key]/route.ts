@@ -13,6 +13,7 @@ export async function GET(_request: Request, context: { params: Promise<{ key: s
     await assertIsolatedD1Scope(getD1());
     const object = await getBucket().get(key);
     if (!object) return new Response("Not found", { status: 404 });
+    if (object.customMetadata?.visibility === "private" || object.customMetadata?.purpose === "quote-signature-v1") return new Response("Not found", { status: 404, headers: { "cache-control": "no-store", "x-robots-tag": "noindex, nofollow" } });
     const type = object.httpMetadata?.contentType;
     if (type !== "image/png" && type !== "image/jpeg" && type !== "image/webp") return new Response("Not found", { status: 404 });
     return new Response(object.body, { headers: {

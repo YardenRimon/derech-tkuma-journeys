@@ -47,7 +47,7 @@ export async function deliverContact(service:Contacts,scope:ContactScope,key:str
  const deadline=new Promise<never>((_,reject)=>{timer=setTimeout(()=>{controller.abort();reject(new Error('contact_delivery_deadline'));},contract.timeoutMs);});
  try{
   await Promise.race([deadline,(async()=>{
-   const response=await fetcher(contract.endpoint,{method:'POST',redirect:'error',credentials:'omit',cache:'no-store',referrerPolicy:'no-referrer',signal:controller.signal,headers:{'content-type':'application/json',[contract.idempotency.header]:record.receipt},body:JSON.stringify(payload)});
+   const response=await fetcher(contract.endpoint,{method:'POST',redirect:'manual',credentials:'omit',cache:'no-store',referrerPolicy:'no-referrer',signal:controller.signal,headers:{'content-type':'application/json',[contract.idempotency.header]:record.receipt},body:JSON.stringify(payload)});
    // Any redirect/non-ack status may follow a side effect. It is uncertain and
    // must be reconciled at the provider, with no automatic second submission.
    if(response.status!==contract.acknowledgement.status||!/^application\/json(?:\s*;|$)/i.test(response.headers.get('content-type')??'')){await response.body?.cancel();return;}

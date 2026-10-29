@@ -58,3 +58,15 @@ assert.deepEqual(readConsent(cookie,revision,now),c);
 for(const value of ['',cookie+'; '+cookie,CONSENT_COOKIE+'=x'.repeat(601),CONSENT_COOKIE+'='+encodeURIComponent(JSON.stringify({...c,email:'private@example.test'})),CONSENT_COOKIE+'='+encodeURIComponent(JSON.stringify({...c,policyVersion:'old'})),CONSENT_COOKIE+'='+encodeURIComponent(JSON.stringify({...c,expires:now-1}))])assert.equal(readConsent(value,revision,now),null);
 assert.equal(readConsent(cookie,'a'.repeat(64),now),null);assert.equal(readConsent(cookie,revision,c.expires+1),null);assert.equal(POLICY_VERSION,'2026-10-20');
 console.log('PASS production profile: all owner/source/resource/measurement gates default closed, separate review validator, snapshot-pinned policy-only transform preserving source SDK disable/order/canonical, fixed CSP/robots/sitemap, server-only profile, bounded/versioned consent cookie and exact source IDs. Synthetic attestation only; no provider verified or called.');
+
+const nativeProfile={...fixtureProfile,paymentsReady:true,paymentEvidence:{...paymentEvidence,acknowledgmentContract:'installed-wallet-23/v1'}};
+assert.doesNotThrow(()=>validateProductionProfile(nativeProfile,fixtureSource.contentRelease));
+assert.throws(()=>validateProductionCloudflareConfig(fixturePortable,nativeProfile));
+const nativePortable={...fixturePortable,vars:{...fixturePortable.vars,CART_MODE:'production',CART_PAYMENT_MODE:'production',CART_PAYMENT_ACCEPT_NEW:'false'}};
+assert.doesNotThrow(()=>validateProductionCloudflareConfig(nativePortable,nativeProfile));
+for(const value of [undefined,'yes','1'])assert.throws(()=>validateProductionCloudflareConfig({...nativePortable,vars:{...nativePortable.vars,CART_PAYMENT_ACCEPT_NEW:value}},nativeProfile));
+assert.doesNotThrow(()=>validateProductionCloudflareConfig({...nativePortable,vars:{...nativePortable.vars,CART_PAYMENT_ACCEPT_NEW:'true'}},nativeProfile));
+for(const value of ['enabled','true'])assert.throws(()=>validateProductionCloudflareConfig({...fixturePortable,vars:{...fixturePortable.vars,SUBMISSION_SIGNATURE_MODE:value}},fixtureProfile));
+assert.throws(()=>validateProductionCloudflareConfig(nativePortable,fixtureProfile));
+assert.throws(()=>validateProductionCloudflareConfig(nativePortable,{...fixtureProfile,paymentsReady:true,paymentEvidence}));
+assert.throws(()=>validateProductionCloudflareConfig({...fixturePortable,vars:{...fixturePortable.vars,SUBMISSION_MODE:'receive-only',SUBMISSION_ENV:'production',SUBMISSION_WORKFLOWS:'rating'}},fixtureProfile));
