@@ -1,3 +1,4 @@
+import {NATIVE_FORM_REPLACEMENT_ENABLED,frozenBusinessResponse} from '@/lib/business-scope';
 import {env} from 'cloudflare:workers';
 import {assertIsolatedD1Scope} from '@/lib/access';
 import {siteScope} from '@/lib/site-scope';
@@ -7,7 +8,7 @@ import {R2ContactPrivacy} from '@/lib/contact-privacy';
 import {contactIngress,contactRetentionDays} from '@/lib/contact-controls';
 export const dynamic='force-dynamic';
 const send=(value:unknown,status:number)=>Response.json(value,{status,headers:{'cache-control':'no-store','x-robots-tag':'noindex, nofollow',...(status===429?{'retry-after':'60'}:{})}});
-export async function POST(request:Request){
+export async function POST(request:Request){if(!NATIVE_FORM_REPLACEMENT_ENABLED)return frozenBusinessResponse();
  try{
   const config=env as unknown as ContactConfig&{DB?:D1Database;BUCKET?:R2Bucket;CONTACT_RETENTION_DAYS?:string;CONTACT_PRIVACY_AUTHORITY_ID?:string};
   checkContactRequest(request,config);

@@ -12,12 +12,15 @@ export class CollectionError extends Error {
   status: number;
   constructor(status: number, message: string) { super(message); this.status = status; }
 }
+/** Internal exact parent read carried to the atomic publication boundary. Never
+ * accepted from Change/HTTP content or stored in the public record. */
+export type ParentPublicationProof=Readonly<{id:string;publishedVersion:number;publishedJSON:string}>;
 export interface CollectionStore {
   get(scope: Scope, kind: Kind, id: string): Promise<Record | null>;
   list(scope: Scope, kind: Kind): Promise<Record[]>;
   published(scope: Scope, kind: Kind): Promise<{ id: string; content: Content; version: number }[]>;
   history(scope: Scope, kind: Kind, id: string): Promise<Snapshot[]>;
-  commit(previous: Record | null, next: Record, audit: Snapshot): Promise<boolean>;
+  commit(previous: Record | null, next: Record, audit: Snapshot, parent?:ParentPublicationProof): Promise<boolean>;
 }
 const text = (x: unknown, max: number, required = true) => {
   if (typeof x !== "string" || x.length > max || (required && !x.trim())) throw new CollectionError(400, "שדה תוכן אינו תקין");
@@ -82,14 +85,16 @@ export class Collections {
       next.published = next.draft === null ? null : validateContent(kind, next.draft); next.publishedVersion++;
     } else throw new CollectionError(400, "פעולה אינה מוכרת");
     // A related record is looked up only inside the same authenticated scope.
+    let parentProof:ParentPublicationProof|undefined;
     const occurrence = (change.operation === "publish" ? next.published : next.draft) as Occurrence | null;
     if (kind === "occurrence" && occurrence) {
       const tour = await this.store.get(scope, "tour", occurrence.tourId);
       if (!tour || (change.operation === "publish" ? !tour.published : !tour.draft)) throw new CollectionError(400, "הסיור המקושר אינו זמין במצב הנדרש");
+      if(change.operation==="publish")parentProof=Object.freeze({id:tour.id,publishedVersion:tour.publishedVersion,publishedJSON:JSON.stringify(tour.published)});
     }
     next.revision++; next.updatedAt = now; next.updatedBy = actor.id;
     const audit: Snapshot = { version: next.revision, operation: change.operation, record: structuredClone(next), actorId: actor.id, at: now };
-    if (!await this.store.commit(previous, next, audit)) throw new CollectionError(409, "הרשומה השתנתה, טען אותה מחדש");
+    if (!await this.store.commit(previous, next, audit, parentProof)) throw new CollectionError(409, "הרשומה השתנתה, טען אותה מחדש");
     return next;
   }
 }

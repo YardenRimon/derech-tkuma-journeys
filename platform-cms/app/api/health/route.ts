@@ -1,9 +1,10 @@
 import { env } from "cloudflare:workers";
 import release from "@/lib/site-release.json";
 import { identityHealth, type IdentityHealthConfig } from "@/lib/identity-health";
+import {productionRelease} from "@/lib/visitor-release";
 export const dynamic = "force-dynamic";
 /** Read-only readiness, safe for an external uptime monitor. No auth/bootstrap writes. */
-export async function GET() {
+export async function GET(request?:Request) {
  const config=env as unknown as {DB?:D1Database;BUCKET?:R2Bucket;CMS_ADAPTER_MODE?:string;CMS_TENANT_ID?:string;CMS_SITE_ID?:string} & IdentityHealthConfig;
  let database=false;
  try {
@@ -14,5 +15,5 @@ export async function GET() {
   }
  }catch{/* Diagnostics stay private; a public monitor gets readiness only. */}
  const mediaBinding=!!config.BUCKET,identity=await identityHealth(config),ready=database&&mediaBinding&&identity.identityReady;
- return Response.json({status:ready?'ready':'starting',mode:'review',contentRelease:release.contentRelease,pages:release.pages,database,mediaBinding,mediaReadWriteTested:false,...identity},{status:ready?200:503,headers:{'cache-control':'no-store','x-robots-tag':'noindex, nofollow'}});
+ return Response.json({status:ready?'ready':'starting',mode:request&&productionRelease(new URL(request.url))?'production':'review',contentRelease:release.contentRelease,pages:release.pages,database,mediaBinding,mediaReadWriteTested:false,...identity},{status:ready?200:503,headers:{'cache-control':'no-store','x-robots-tag':'noindex, nofollow'}});
 }
