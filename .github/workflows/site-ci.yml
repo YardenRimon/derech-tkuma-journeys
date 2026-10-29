@@ -59,7 +59,7 @@ jobs:
           node --experimental-strip-types scripts/test-contact.mjs
           node --experimental-strip-types scripts/test-visitor-policy.mjs
           node --experimental-strip-types scripts/test-contact-client.mjs
-          node scripts/test-contact-http.mjs
+          # Frozen native intake entry is covered by npm test/test-business-scope.
           npm run test:integrations
           npm run test:production
       - name: Install pinned isolated test browser

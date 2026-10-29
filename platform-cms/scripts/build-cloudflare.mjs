@@ -35,7 +35,8 @@ export function releasePlan(environment,config){assertNode24();validateCloudflar
  [process.execPath,['--experimental-strip-types','scripts/test-contact.mjs'],base],
  [process.execPath,['--experimental-strip-types','scripts/test-visitor-policy.mjs'],base],
  [process.execPath,['--experimental-strip-types','scripts/test-contact-client.mjs'],base],
- [process.execPath,['scripts/test-contact-http.mjs'],base],
+ // Native form replacement is frozen; actual entry denial is tested by npm test/test-business-scope.
+
  ['npm',['run','test:integrations'],base],
  ['npm',['run','test:production'],base],
  ['npm',['run','build'],{...base,PLATFORM_DEPLOY_TARGET:'cloudflare',PLATFORM_RELEASE_SHA:sha,PLATFORM_CF_CONFIG_PATH:environment.PLATFORM_CF_CONFIG_PATH??path.join(projectRoot,'wrangler.cloudflare.json')}],
