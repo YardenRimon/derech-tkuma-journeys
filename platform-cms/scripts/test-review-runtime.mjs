@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import {prepareReviewRuntime} from '../lib/review-runtime.ts';
+const input='<script src="/__pilot__/guard.js"></script><script type="text/rocketlazyloadscript" data-rocket-src="/jquery.js" defer></script><script type="text/rocketlazyloadscript">const sourceConfig = {text:"unchanged"};</script><script src="/core.js" async="async" defer="defer"></script><script type="text/rocketlazyloadscript" data-rocket-src="/pro.js" defer></script>';
+assert.equal(prepareReviewRuntime(input),'<script src="/__pilot__/guard.js"></script><script src="/jquery.js"></script><script>const sourceConfig = {text:"unchanged"};</script><script src="/core.js"></script><script src="/pro.js"></script>');
+const module='<script type="module" src="/module.js" async></script>';
+assert.equal(prepareReviewRuntime(module),module);
+assert.equal(prepareReviewRuntime('<script type="text/rocketlazyloadscript" data-rocket-type="module" data-rocket-src="/module.js" defer></script>'),'<script src="/module.js" defer type="module"></script>');
+const external='<script src="https://example.invalid/external.js" defer></script>';
+assert.equal(prepareReviewRuntime(external),external);
+assert.equal(prepareReviewRuntime('<script>class RocketLazyLoadScripts {}</script>'),'<!-- review: native script loading replaces the source cache replay loader -->');
+console.log('PASS review runtime: guard-first original classic parser order, exact inline bodies, module/external semantics and no cache replay loader');

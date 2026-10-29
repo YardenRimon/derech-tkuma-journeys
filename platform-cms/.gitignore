@@ -1,0 +1,17 @@
+node_modules/
+/dist/
+.next/
+.wrangler/
+.sites-runtime/
+.env*
+.dev.vars*
+*.tsbuildinfo
+lib/generated-pages.json
+
+.vinext/
+!.dev.vars.example
+
+node_modules
+
+/dist-production/
+scripts/__pycache__/

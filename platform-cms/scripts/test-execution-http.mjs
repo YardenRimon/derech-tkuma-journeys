@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import {readFileSync,writeFileSync} from 'node:fs';
+import {createHmac} from 'node:crypto';
+const origin='http://127.0.0.1:5176',secret='local-fixture-only-'+'x'.repeat(48);
+async function call(path,options={},status=200){const r=await fetch(origin+path,options),text=await r.text();assert.equal(r.status,status,path+': '+text.slice(0,250));return JSON.parse(text);}
+async function signed(body,status=200,valid=true){const raw=JSON.stringify(body),time=String(Math.floor(Date.now()/1000));return call('/api/execution',{method:'POST',headers:{'content-type':'application/json','x-bridge-time':time,'x-bridge-signature':valid?createHmac('sha256',secret).update(time+'\n'+raw).digest('hex'):'0'.repeat(64)},body:raw},status);}
+const login=await fetch(origin+'/signin-with-chatgpt?return_to=%2Fadmin',{redirect:'manual'});const cookie=login.headers.get('set-cookie').split(';')[0];
+const headers={cookie,origin,'content-type':'application/json'};
+await call('/api/reports',{},401);
+await call('/api/execution?effectKey='+'e'.repeat(64),{},401);
+const data=JSON.parse(readFileSync(new URL('../lib/current-collections.json',import.meta.url))),before=data.records.find(x=>x.id==='route-oz').content;
+const effect={effectKey:'e'.repeat(64),itemId:10,target:'route-oz',before,after:{...before,description:'במסלול עוז מול תופת יש 4 נקודות עצירה.'}};
+const snapshot={externalId:'26',externalVersion:'fixture-v1',title:'בדיקה מקומית — מספר אנשים למענה',category:'content_review',sourceUrl:'',sourceHash:'',linkedTarget:'',quotedContent:'',question:'כמה אנשים עונים?',assigneeEmail:'seedy@sites.test',assigneeLabel:'בדיקה מקומית',status:'waiting_info',answer:''};
+const packet={schemaVersion:1,tasks:[snapshot],effects:[effect],report:{schemaVersion:1,tenantId:'derech',siteId:'derech-main',sourceAt:new Date().toISOString(),jobs:[{id:effect.effectKey,itemId:10,recipe:'route_workspace',state:'executed_private',updatedAt:new Date().toISOString()}]}};
+await signed(packet,401,false);await signed({...packet,tenantId:'injected'},400);
+let applied=await signed(packet);assert.equal(applied.receipts[0].state,'applied_draft');const revision=applied.receipts[0].revision;
+assert.equal((await signed(packet)).receipts[0].revision,revision);
+let record=(await call('/api/collections/tour?id=route-oz',{headers:{cookie}})).record;assert.deepEqual(record.draft,effect.after);assert.equal(record.published,null);
+const report=await call('/api/reports',{headers:{cookie}});assert.equal(report.taskTotal,1);assert.equal(report.execution.jobs.length,1);
+const task=(await call('/api/tasks?id=26',{headers:{cookie}})).record;
+await call('/api/tasks',{method:'POST',headers,body:JSON.stringify({operation:'request',id:'26',key:'local_fixture_answer_20261019',expectedRevision:task.revision,answer:'There are 3 people answering inquiries.',requestedStatus:'waiting_info'})},202);
+let commands=(await signed(packet)).commands;assert.equal(commands.length,1);assert.equal(commands[0].actorEmail,'seedy@sites.test');
+const settled={...packet,tasks:[{...snapshot,externalVersion:'fixture-v2',answer:'There are 3 people answering inquiries.'}],commandReceipts:[{key:commands[0].key,state:'accepted',note:'Isolated fixture only: source status verified.'}]};
+assert.equal((await signed(settled)).commands.length,0);
+await call('/api/execution',{method:'POST',headers,body:JSON.stringify({operation:'rollback',effectKey:effect.effectKey,expectedRevision:revision})});
+assert.equal((await signed(settled)).receipts[0].state,'rolled_back');
+record=(await call('/api/collections/tour?id=route-oz',{headers:{cookie}})).record;assert.deepEqual(record.draft,before);assert.equal(record.published,null);
+const final=await signed({...settled,effects:[{...effect,effectKey:'f'.repeat(64)}]});assert.equal(final.receipts[0].state,'applied_draft');
+for(const path of ['/admin/dashboard','/admin/reports','/admin/execution'])assert.equal((await fetch(origin+path,{headers:{cookie}})).status,200);
+console.log('PASS isolated local HTTP: HMAC/anonymous/scope denial; actual CMS draft, durable replay, task answer request/receipt, dashboard/report, rollback and no-reapply; public content unchanged.');

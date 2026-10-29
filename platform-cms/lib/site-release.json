@@ -1,0 +1,47 @@
+{
+  "mode": "review",
+  "pages": 51,
+  "contentRelease": "981335a895e128a516baefd78156ddbc5579c579a505c70f5fe05f649a0f45db",
+  "capturedAt": "2026-10-28T15:25:41.865611+00:00",
+  "canonicals": [
+    "https://derech-tkuma.com/",
+    "https://derech-tkuma.com/maslulim/",
+    "https://derech-tkuma.com/maslulim/נקודות-החיבור/",
+    "https://derech-tkuma.com/maslulim/עוז-מול-תופת/",
+    "https://derech-tkuma.com/maslulim/קו-המגע/",
+    "https://derech-tkuma.com/אודותינו/",
+    "https://derech-tkuma.com/אטרקציות-בעוטף-המדריך-המלא-לחוויות/",
+    "https://derech-tkuma.com/גבעת-התצפתניות/",
+    "https://derech-tkuma.com/הבלוג/",
+    "https://derech-tkuma.com/המדריכים/",
+    "https://derech-tkuma.com/המסלולים/",
+    "https://derech-tkuma.com/הצעה/",
+    "https://derech-tkuma.com/התצפיות/",
+    "https://derech-tkuma.com/טיולים-בעוטף-עזה-להכיר-את-המרחב-דרך-ח/",
+    "https://derech-tkuma.com/טיולים-עם-ילדים-בדרום-ובעוטף-עזה-חוויה/",
+    "https://derech-tkuma.com/מדריך-לסיור-בעוטף-עזה-כך-תבחרו-את-החו/",
+    "https://derech-tkuma.com/מסלול-נקודות-החיבור/",
+    "https://derech-tkuma.com/מסלול-עוז-מול-תופת/",
+    "https://derech-tkuma.com/מסלול-קו-המגע/",
+    "https://derech-tkuma.com/מסע-עוטף/",
+    "https://derech-tkuma.com/מפת-האתר/",
+    "https://derech-tkuma.com/מצפה-כרם-שלום/",
+    "https://derech-tkuma.com/מצפה-נירים/",
+    "https://derech-tkuma.com/סיור-באתר-הנובה-להבין-את-מה-שקרה-דרך-ה/",
+    "https://derech-tkuma.com/סיור-בקיבוצי-העוטף-לחוות-להבין-ולהת/",
+    "https://derech-tkuma.com/סיור-וביקור-בבארי-נחל-עוז-וכפר-עזה-לה/",
+    "https://derech-tkuma.com/סיור-מודרך-בעוטף-עזה-מלחמת-חרבות-ברזל/",
+    "https://derech-tkuma.com/סיורים-בעוטף-עזה-בעקבות-המלחמה/",
+    "https://derech-tkuma.com/סיורים-לעוטף-עזה-לצוות-מורים-ותלמידים/",
+    "https://derech-tkuma.com/סיורים/",
+    "https://derech-tkuma.com/שאלות-נפוצות-נקודות-תצפית-בעוטף-עזה/",
+    "https://derech-tkuma.com/שאלות-תשובות-דרך-התקומה/"
+  ],
+  "redirects": [
+    {
+      "route": "/checkout/",
+      "status": 302,
+      "location": "https://derech-tkuma.com/cart/"
+    }
+  ]
+}

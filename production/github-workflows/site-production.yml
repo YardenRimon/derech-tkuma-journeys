@@ -1,0 +1,81 @@
+# Prepared first cutover/release. Install on main only after the cutover gates.
+name: Deploy accepted production
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: derech-cloudflare-production
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.repository == 'YardenRimon/derech-tkuma-journeys' && github.ref == 'refs/heads/main' && vars.DERECH_PRODUCTION_ENABLED == 'true'
+    environment: derech-cloudflare-production
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PLATFORM_RELEASE_SHA: ${{ github.sha }}
+      DERECH_PRODUCTION_PROFILE_PATH: ${{ runner.temp }}/derech-production-profile.json
+      DERECH_PRODUCTION_CONFIG_PATH: ${{ github.workspace }}/platform-cms/wrangler.production.json
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: platform-cms/package-lock.json
+      - name: Require the exact current main and successful checks
+        env:
+          GH_READ_TOKEN: ${{ github.token }}
+        run: node production/production-cd-policy.mjs
+      - name: Materialize approved configuration
+        env:
+          PROFILE_JSON: ${{ vars.DERECH_PRODUCTION_PROFILE_JSON }}
+          CONFIG_JSON: ${{ vars.DERECH_PRODUCTION_CONFIG_JSON }}
+        run: |
+          test -n "$PROFILE_JSON" && test -n "$CONFIG_JSON"
+          printf '%s\n' "$PROFILE_JSON" > "$DERECH_PRODUCTION_PROFILE_PATH"
+          printf '%s\n' "$CONFIG_JSON" > "$DERECH_PRODUCTION_CONFIG_PATH"
+      - name: Install locked dependencies
+        working-directory: platform-cms
+        run: npm ci --no-audit --no-fund
+      - name: Hydrate frozen public media
+        env:
+          MEDIA_URL: ${{ vars.DERECH_MEDIA_ARCHIVE_URL }}
+          MEDIA_SHA256: ${{ vars.DERECH_MEDIA_ARCHIVE_SHA256 }}
+        run: |
+          test -n "$MEDIA_URL" && test -n "$MEDIA_SHA256"
+          case "$MEDIA_URL" in https://*) ;; *) exit 1 ;; esac
+          curl --fail --silent --show-error --proto '=https' --proto-redir '=https' --location --max-redirs 2 "$MEDIA_URL" -o "$RUNNER_TEMP/derech-media.tgz"
+          python3 platform-cms/scripts/hydrate-cloudflare-media.py --archive "$RUNNER_TEMP/derech-media.tgz" --sha256 "$MEDIA_SHA256" --root platform-cms
+      - name: Hydrate pinned source snapshot supplement
+        run: python3 platform-cms/scripts/hydrate-source-snapshot.py --root platform-cms
+      - name: Build and verify the separate production artifact
+        working-directory: platform-cms
+        run: |
+          node scripts/build-production.mjs
+          node scripts/validate-production-artifact.mjs
+      - name: Recheck source immediately before release
+        env:
+          GH_READ_TOKEN: ${{ github.token }}
+        run: node production/production-cd-policy.mjs
+      - name: Apply schema and deploy the accepted artifact
+        working-directory: platform-cms
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          GH_READ_TOKEN: ${{ github.token }}
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN" && test -n "$CLOUDFLARE_ACCOUNT_ID"
+          node scripts/validate-production-artifact.mjs
+          npx wrangler d1 migrations apply DB --remote --config wrangler.production.json
+          node ../production/production-cd-policy.mjs
+          npx wrangler deploy --config dist-production/server/wrangler.json
+          node scripts/verify-production-live.mjs
+      - name: Remove transient configuration
+        if: always()
+        run: rm -f "$DERECH_PRODUCTION_PROFILE_PATH" "$DERECH_PRODUCTION_CONFIG_PATH" "$RUNNER_TEMP/derech-media.tgz"

@@ -1,0 +1,58 @@
+import assert from 'node:assert/strict';
+import {readFileSync,readdirSync} from 'node:fs';
+import {DatabaseSync} from 'node:sqlite';
+import {createHmac} from 'node:crypto';
+import {spawnSync} from 'node:child_process';
+import ts from 'typescript';
+import {Collections} from '../lib/collection-core.ts';
+const moduleUrl=text=>'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(text,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ESNext}}).outputText).toString('base64');
+let core=readFileSync(new URL('../lib/seo-draft-core.ts',import.meta.url),'utf8');
+for(const n of ['collection-core','collection-d1'])core=core.replaceAll("'./"+n+"'",JSON.stringify(new URL('../lib/'+n+'.ts',import.meta.url).href));
+const coreUrl=moduleUrl(core),{SeoDraftStore}=await import(coreUrl);
+let helper=readFileSync(new URL('../app/api/machine/seo/seo-request.ts',import.meta.url),'utf8');
+helper=helper.replace("'../../../../lib/collection-core'",JSON.stringify(new URL('../lib/collection-core.ts',import.meta.url).href)).replace("'../../../../lib/seo-draft-core'",JSON.stringify(coreUrl));
+const helperUrl=moduleUrl(helper),{validateSeoRequest,SEO_PURPOSE,SEO_ENDPOINT}=await import(helperUrl);
+const fixtureKey='__derechSeoMachineFixture',fixture={scope:{tenantId:'derech',siteId:'derech-main'},secret:'machine-seo-fixture-'+'.'.repeat(48),isolated:true,scopeChecks:0};globalThis[fixtureKey]=fixture;
+const ref='globalThis.'+fixtureKey;
+const access=moduleUrl(`export class CmsError extends Error{constructor(status,message){super(message);this.status=status;}};export async function assertIsolatedD1Scope(){${ref}.scopeChecks++;if(!${ref}.isolated)throw new CmsError(503,'isolation denied');}`);
+const cms=moduleUrl(`export function getD1(){return ${ref}.db;}export function jsonError(e){return Response.json({error:e.message},{status:e.status??500});}`);
+let route=readFileSync(new URL('../app/api/machine/seo/route.ts',import.meta.url),'utf8');
+const replacements={'cloudflare:workers':moduleUrl(`export const env={get CMS_EXECUTION_SECRET(){return ${ref}.secret;}};`),'@/lib/access':access,'@/lib/cms':cms,'@/lib/site-scope':moduleUrl(`export function siteScope(){return ${ref}.scope;}`),'@/lib/collection-core':new URL('../lib/collection-core.ts',import.meta.url).href,'./seo-request':helperUrl};
+for(const [name,url] of Object.entries(replacements))route=route.replaceAll("'"+name+"'",JSON.stringify(url));
+const {POST}=await import(moduleUrl(route));
+const sqlite=new DatabaseSync(':memory:');sqlite.exec('PRAGMA foreign_keys=ON');
+for(const file of readdirSync(new URL('../drizzle/',import.meta.url)).filter(x=>x.endsWith('.sql')).sort())sqlite.exec(readFileSync(new URL('../drizzle/'+file,import.meta.url),'utf8'));
+fixture.db={prepare(sql){const stmt=sqlite.prepare(sql);return{args:[],bind(...args){this.args=args;return this;},async first(){return stmt.get(...this.args)??null;},async all(){return{results:stmt.all(...this.args)};},async run(){return{meta:{changes:Number(stmt.run(...this.args).changes)}};}};},async batch(statements){sqlite.exec('BEGIN');try{const out=[];for(const s of statements)out.push(await s.run());sqlite.exec('COMMIT');return out;}catch(e){sqlite.exec('ROLLBACK');throw e;}}};
+const seed=JSON.parse(readFileSync(new URL('../lib/current-collections.json',import.meta.url),'utf8')),store=new SeoDraftStore(fixture.db),cmsStore=new Collections(store),actor={id:'owner-fixture',canPublish:true};
+const release=JSON.parse(readFileSync(new URL('../lib/site-release.json',import.meta.url)));
+assert.ok([37,51].includes(release.pages),'unexpected source inventory');
+const expectedTours=['route-points','route-oz','route-contact','open-tour'].sort();
+const expectedOccurrences=(release.pages===51?['source-product-7681','source-product-7899','source-product-7882','source-product-7891','source-product-8249','source-product-8251','source-product-8253','source-product-8255','source-product-8257']:['source-product-7844','source-product-7920','source-product-7681','source-product-7899','source-product-7882','source-product-7891']).sort();
+assert.equal(seed.records.length,4+expectedOccurrences.length);assert.deepEqual(seed.records.filter(row=>row.kind==='tour').map(row=>row.id).sort(),expectedTours);assert.deepEqual(seed.records.filter(row=>row.kind==='occurrence').map(row=>row.id).sort(),expectedOccurrences);
+for(const row of seed.records){await cmsStore.change(fixture.scope,actor,row.kind,row.id,{operation:'save',expectedRevision:0,content:row.content});await cmsStore.change(fixture.scope,actor,row.kind,row.id,{operation:'publish',expectedRevision:1});}
+const body={purpose:SEO_PURPOSE,operation:'readback',tenantId:'derech',siteId:'derech-main'};
+function signed(value=body,{url=SEO_ENDPOINT,time=String(Math.floor(Date.now()/1000)),purpose=SEO_PURPOSE,headers={},valid=true}={}){const raw=typeof value==='string'?value:JSON.stringify(value);return new Request(url,{method:'POST',body:raw,headers:{'content-type':'application/json','x-bridge-time':time,'x-bridge-signature':valid?createHmac('sha256',fixture.secret).update(time+'\n'+(purpose?purpose+'\n':'')+raw).digest('hex'):'0'.repeat(64),...headers}});}
+const state=()=>sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all().map(({name})=>[name,sqlite.prepare('SELECT * FROM '+name+' ORDER BY rowid').all()]);
+const baseline=state();let response=await POST(signed());assert.equal(response.status,200);assert.equal(response.headers.get('cache-control'),'no-store');assert.match(response.headers.get('x-robots-tag'),/noindex/);let snapshot=await response.json();
+assert.equal(snapshot.schema,SEO_PURPOSE);assert.equal(snapshot.origin,new URL(SEO_ENDPOINT).origin);assert.equal(snapshot.projection.tours.records.length,4);assert.equal(snapshot.projection.occurrences.records.length,expectedOccurrences.length);assert.deepEqual(snapshot.projection.tours.records.map(row=>row.id).sort(),expectedTours);assert.deepEqual(snapshot.projection.occurrences.records.map(row=>row.id).sort(),expectedOccurrences);assert.equal(snapshot.readbacks.length,4);assert(snapshot.readbacks.every(r=>r.recordRevision===2&&r.draft===null&&r.receipt===null));assert.deepEqual(state(),baseline,'snapshot must never write settings, history, users or content');
+for(const [value,options,status] of [[body,{valid:false},401],[body,{purpose:''},401],[body,{purpose:'cms-other/v1'},401],[{...body,purpose:'execution'}, {},403],[{...body,operation:'publish'}, {},403],[{...body,tenantId:'other'}, {},403],[{...body,siteId:'other'}, {},403],[{...body,ids:['route-oz']},{},403],[{...body,url:'https://other.invalid'}, {},403],['{',{},400],[body,{url:SEO_ENDPOINT+'?id=route-oz'},403],[body,{url:SEO_ENDPOINT.replace('review.','other.')},403],[body,{headers:{origin:'https://other.invalid'}},403],[body,{time:String(Math.floor(Date.now()/1000)-121)},401],[body,{time:String(Math.floor(Date.now()/1000)+121)},401]]){response=await POST(signed(value,options));assert.equal(response.status,status,JSON.stringify([value,options]));assert.match(response.headers.get('x-robots-tag'),/noindex/);assert.equal(response.headers.get('cache-control'),'no-store');}
+assert.equal((await POST(new Request(SEO_ENDPOINT,{method:'POST',body:JSON.stringify(body)}))).status,401);
+assert.equal((await POST(new Request(SEO_ENDPOINT))).status,405);
+fixture.secret=undefined;assert.equal((await POST(new Request(SEO_ENDPOINT,{method:'POST',body:'{}'}))).status,503);fixture.secret='machine-seo-fixture-'+'.'.repeat(48);
+const beforeScope=fixture.scopeChecks;await POST(signed(body,{valid:false}));assert.equal(fixture.scopeChecks,beforeScope,'anonymous/invalid signature must not read D1');
+fixture.scope={tenantId:'derech',siteId:'wrong'};assert.equal((await POST(signed())).status,403);fixture.scope={tenantId:'derech',siteId:'derech-main'};
+fixture.isolated=false;assert.equal((await POST(signed())).status,503);fixture.isolated=true;
+let cancelled=false;const oversized=new Request(SEO_ENDPOINT,{method:'POST',duplex:'half',body:new ReadableStream({start(controller){controller.enqueue(new Uint8Array(2048));controller.enqueue(new Uint8Array(1));},cancel(){cancelled=true;}})});assert.equal((await POST(oversized)).status,413);assert(cancelled);
+assert.equal((await POST(signed(body,{headers:{'content-length':'2049'}}))).status,413);
+const exact=' '.repeat(2048-JSON.stringify(body).length)+JSON.stringify(body);await validateSeoRequest(signed(exact),fixture.secret);
+assert.deepEqual(state(),baseline,'all denied/read-only requests must leave authoritative DB unchanged');
+const python=(name,args)=>{const code=`import sys,json;sys.path.insert(0,sys.argv[1]);from execution import ${name};print(json.dumps(${name}(*json.load(sys.stdin)),ensure_ascii=False))`;const r=spawnSync('python3',['-B','-c',code,new URL('../../production/seo',import.meta.url).pathname],{input:JSON.stringify(args),encoding:'utf8'});assert.equal(r.status,0,r.stderr);return JSON.parse(r.stdout);};
+const plan=python('prepare',[snapshot.projection,snapshot.readbacks]);assert.equal(plan.effects.length,4);assert.equal(plan.no_publish,true);
+const effect=plan.effects[0];await store.applySeo(fixture.scope,effect);snapshot=await(await POST(signed())).json();const rb=snapshot.readbacks.find(r=>r.tourId===effect.target);assert.equal(python('verify_readback',[effect,rb]).state,'verified_private_draft');assert.equal(python('prepare',[snapshot.projection,snapshot.readbacks]).effects.length,3);
+const applied=state();await POST(signed());assert.deepEqual(state(),applied,'readback replay may never mutate a draft/receipt');
+await store.rollbackSeo(fixture.scope,effect.effectKey,1,'owner-fixture');snapshot=await(await POST(signed())).json();assert.equal(python('verify_readback',[effect,snapshot.readbacks.find(r=>r.tourId===effect.target)]).state,'rolled_back');assert.equal(python('prepare',[snapshot.projection,snapshot.readbacks]).effects.length,3);
+// A deployment with an unexpected inventory fails closed instead of partial enumeration.
+await cmsStore.change(fixture.scope,actor,'tour','fixture-fifth',{operation:'save',expectedRevision:0,content:{...seed.records.find(r=>r.kind==='tour').content,slug:'fixture-fifth',sourcePath:'/maslulim/fixture-fifth/'}});await cmsStore.change(fixture.scope,actor,'tour','fixture-fifth',{operation:'publish',expectedRevision:1});assert.equal((await POST(signed())).status,409);
+assert(!/export (?:async )?function (?:GET|PUT|PATCH|DELETE)/.test(route));
+console.log('PASS fixed SEO machine route: actual scoped SQLite projections/private readbacks, purpose-separated exact-byte HMAC120s, execution-signature replay denial,2KiB streaming cap, strict keys/origin/query/scope/isolation, no D1 reads before authentication, no writes, current Python prepare/verified readback and rollback tombstones');
+delete globalThis[fixtureKey];

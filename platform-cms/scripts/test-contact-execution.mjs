@@ -1,0 +1,99 @@
+/** Actual SQLite, signed gateway functions, and loopback provider only.
+ * All contracts/contacts are synthetic; never a provider configuration proof. */
+import assert from 'node:assert/strict';
+import {DatabaseSync} from 'node:sqlite';
+import {readFileSync,readdirSync} from 'node:fs';
+import {createServer} from 'node:http';
+import {createHash,createHmac} from 'node:crypto';
+import {build} from 'esbuild';
+import {fileURLToPath} from 'node:url';
+import calendar from '../../independent-monitor/calendar.json' with {type:'json'};
+import {CALENDAR_SHA256,calendarAllowed} from '../../independent-monitor/policy.mjs';
+import {contactPrivacyBucket,fixtureContactPrivacyAuthority} from './contact-privacy-fixture.mjs';
+const root=fileURLToPath(new URL('../',import.meta.url));
+const bundle=await build({stdin:{contents:`export * from './lib/contact-execution';export * from './lib/contact-core';export * from './lib/contact-d1';export * from './lib/contact-privacy';`,resolveDir:root},bundle:true,write:false,format:'esm',platform:'node',target:'es2022',logLevel:'silent'});
+const {createContactDispatcher,Contacts,D1Contacts,R2ContactPrivacy,contactPrivacyKey}=await import('data:text/javascript;base64,'+Buffer.from(bundle.outputFiles[0].text).toString('base64'));
+const scope={tenantId:'derech',siteId:'derech-main'},BASE=Math.floor(Date.parse('2026-10-20T12:00:00Z')/1000);
+assert.equal(calendarAllowed(calendar,BASE),true);assert.equal(createHash('sha256').update(JSON.stringify(calendar)+'\n').digest('hex'),CALENDAR_SHA256);
+const contract={schema:1,kind:'make',verified:true,scope,formIds:['0899899','af355f0'],endpoint:'https://hook.eu2.make.com/synthetic_contact_fixture_only',fields:{name:'fullName',phone:'phone',email:'email',form:'formId',post:'postId',consent:'consentAt',receipt:'receipt'},idempotency:{header:'x-contact-idempotency',verified:true},acknowledgement:{status:202,field:'state',value:'accepted',receiptField:'receipt'},timeoutMs:150};
+const configuration=(c=contract)=>{const raw=JSON.stringify(c);return{CONTACT_DELIVERY_MODE:'verified-make',CONTACT_DELIVERY_SECRET:raw,CONTACT_DELIVERY_CONTRACT_SHA256:createHash('sha256').update(raw).digest('hex'),CONTACT_RETENTION_DAYS:'30',CONTACT_PRIVACY_AUTHORITY_ID:fixtureContactPrivacyAuthority};};
+const input=(key=crypto.randomUUID(),formId='0899899')=>({idempotencyKey:key,formId,fullName:'בדיקה סינתטית',phone:'0501234567',email:'synthetic@example.test',consent:{contact:true,policyVersion:'source-2026-10-19'},honeypot:''});
+const all=[];
+function fixture(){
+ const sqlite=new DatabaseSync(':memory:');all.push(sqlite);for(const file of readdirSync(new URL('../drizzle/',import.meta.url)).filter(x=>x.endsWith('.sql')).sort())sqlite.exec(readFileSync(new URL('../drizzle/'+file,import.meta.url),'utf8'));
+ const f={sqlite,reads:0,writes:0,r2:0,now:BASE,afterFirst:null,afterRun:null};
+ const db={prepare(sql){f.reads++;const statement=sqlite.prepare(sql);return{args:[],bind(...args){this.args=args;return this;},async first(){const row=statement.get(...this.args)??null;if(f.afterFirst)await f.afterFirst(sql,this.args,row);return row;},async all(){return{results:statement.all(...this.args)};},async run(){f.writes++;const result={meta:{changes:Number(statement.run(...this.args).changes)}};if(f.afterRun)await f.afterRun(sql,this.args,result);return result;}};},async batch(statements){sqlite.exec('BEGIN');try{const results=[];for(const s of statements)results.push(await s.run());sqlite.exec('COMMIT');return results;}catch(e){sqlite.exec('ROLLBACK');throw e;}}};
+ const bucket=contactPrivacyBucket(),original=bucket.get.bind(bucket);bucket.get=async key=>{f.r2++;return original(key);};
+ const store=new D1Contacts(db),privacy=new R2ContactPrivacy(bucket,fixtureContactPrivacyAuthority),service=new Contacts(store,30,privacy);
+ Object.assign(f,{db,bucket,store,privacy,service});f.seed=async(value=input(),at=f.now)=>{await service.submit(scope,value,new Date(at*1000));return value.idempotencyKey;};f.record=key=>store.get(scope,key);f.dispatch=(fetchImpl,calendarValue=calendar)=>createContactDispatcher({clock:()=>f.now,fetchImpl,calendarValue});return f;
+}
+let calls=[],mode='ack',releaseProvider;
+const server=createServer(async(req,res)=>{let raw='';for await(const chunk of req)raw+=chunk;calls.push({method:req.method,headers:req.headers,body:JSON.parse(raw)});if(mode==='hold')await new Promise(resolve=>{releaseProvider=resolve;});res.writeHead(202,{'content-type':'application/json'});if(mode==='timeout'){res.write('{');return;}res.end(mode==='bad'?'{}':JSON.stringify({state:'accepted',receipt:'synthetic-provider-receipt'}));});
+await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const provider='http://127.0.0.1:'+server.address().port;
+const transport=async(url,options)=>{assert.equal(url,contract.endpoint,'only pinned fixture route reaches loopback adapter');assert.equal(options.redirect,'manual');assert.equal(options.credentials,'omit');return fetch(provider,options);};
+const clean=value=>{const raw=JSON.stringify(value);for(const privateValue of ['synthetic@example.test','0501234567','בדיקה סינתטית',contract.endpoint,configuration().CONTACT_DELIVERY_SECRET])assert.ok(!raw.includes(privateValue),'only fixed states/opaque receipt leave hook');return value;};
+try{
+ // Disabled/invalid active configuration has zero DB, bucket or provider work.
+ const poison=new Proxy({}, {get(){throw Error('must not touch I/O');}}),dispatch=createContactDispatcher({clock:()=>BASE,fetchImpl:()=>{throw Error('no provider');}});
+ for(const config of [{},{CONTACT_DELIVERY_MODE:'enabled'},{CONTACT_DELIVERY_MODE:'verified-make'},{...configuration(),CONTACT_DELIVERY_CONTRACT_SHA256:'0'.repeat(64)},configuration({...contract,endpoint:'https://outside.invalid/endpoint'}),configuration({...contract,formIds:['1b8a2d8']}),{...configuration(),CONTACT_RETENTION_DAYS:undefined},{...configuration(),CONTACT_PRIVACY_AUTHORITY_ID:'wrong'}]){const r=clean(await dispatch(poison,poison,scope,config));assert.ok(['disabled','unconfigured'].includes(r.state));}
+ assert.equal((await dispatch(poison,poison,{tenantId:'other',siteId:'other-main'},configuration())).state,'unconfigured');
+ // Exact authority calendar, every closure/lookahead and expired range; no I/O.
+ for(const at of [calendar.validFrom-1,calendar.validUntil,NaN,...calendar.closed.flatMap(([start,end])=>[start-12,start,end-1])])assert.equal((await createContactDispatcher({clock:()=>at})(poison,poison,scope,configuration())).state,'held');
+ const modified=structuredClone(calendar);modified.closed[0][0]++;
+ assert.equal((await createContactDispatcher({clock:()=>BASE,calendarValue:modified})(poison,poison,scope,configuration())).state,'held','full SHA rejects structurally valid altered calendar');
+ const noAuthority=fixture();noAuthority.bucket.objects.clear();let r=await noAuthority.dispatch(transport)(noAuthority.db,noAuthority.bucket,scope,configuration());assert.equal(r.state,'unavailable');assert.equal(noAuthority.reads,0);
+ // SQL candidate selection is scoped, schema1, exact verified source pair, max1.
+ const scoped=fixture(),wanted=await scoped.seed(input('50000000-0000-4000-8000-000000000005','af355f0'));
+ const base=await scoped.record(wanted);for(const [key,alter]of [['10000000-0000-4000-8000-000000000001',{scope:{tenantId:'other',siteId:'other-main'}}],['20000000-0000-4000-8000-000000000002',{source:{formId:'1b8a2d8',postId:'1489'}}],['30000000-0000-4000-8000-000000000003',{source:{formId:'0899899',postId:'999'}}],['40000000-0000-4000-8000-000000000004',{schema:2}]])scoped.sqlite.prepare('INSERT INTO cms_settings VALUES(?,?)').run('contact:v1:derech:derech-main:'+key,JSON.stringify({...base,...alter,key}));
+ const beforeScoped=calls.length;r=clean(await scoped.dispatch(transport)(scoped.db,scoped.bucket,scope,configuration()));assert.equal(r.state,'provider_accepted');assert.equal(calls.length,beforeScoped+1);assert.equal(calls.at(-1).body.form,'af355f0');assert.equal(calls.at(-1).body.post,'18');assert.equal(calls.at(-1).headers['x-contact-idempotency'],base.receipt);assert.equal((await scoped.record(wanted)).outbox.state,'provider_accepted');assert.equal((await scoped.dispatch(transport)(scoped.db,scoped.bucket,scope,configuration())).state,'idle');
+ // Both source route groups coexist under the same lock/candidate limit.
+ const footerContract={...contract,formIds:['1b8a2d8'],endpoint:'https://hook.eu2.make.com/synthetic_footer_fixture_only',fields:{...contract.fields,message:'message'}};
+ for(const invalid of [[],[contract,contract],[contract,{...footerContract,endpoint:contract.endpoint}],[contract,footerContract,footerContract],{...footerContract,formIds:['1b8a2d8','0899899']},{...footerContract,fields:contract.fields},{...contract,fields:{...contract.fields,message:'message'}}]){
+  const result=await dispatch(poison,poison,scope,configuration(invalid));assert.equal(result.state,'unconfigured','invalid or overlapping routes rejected before I/O');
+ }
+ const both=fixture(),footerInput={...input('10000000-0000-4000-8000-000000000001','1b8a2d8'),message:'הודעה פרטית\nשורה נוספת'},footerKey=await both.seed(footerInput),homeKey=await both.seed(input('20000000-0000-4000-8000-000000000002'));
+ const mixedConfiguration=configuration([contract,footerContract]),mixedCalls=[];
+ const separateTransport=async(url,options)=>{mixedCalls.push({url,payload:JSON.parse(options.body)});return fetch(provider,options);};
+ const mixedRun=both.dispatch(separateTransport);let mixedResult=await mixedRun(both.db,both.bucket,scope,mixedConfiguration);
+ assert.equal(mixedResult.state,'provider_accepted');assert.equal(mixedCalls.length,1,'at most one provider attempt across all configured routes');assert.equal(mixedCalls[0].url,footerContract.endpoint);assert.equal(mixedCalls[0].payload.message,footerInput.message);assert.equal((await both.record(homeKey)).outbox.state,'pending_routing');
+ assert.ok(!JSON.stringify(mixedResult).includes(footerInput.message));
+ mixedResult=await mixedRun(both.db,both.bucket,scope,mixedConfiguration);assert.equal(mixedResult.state,'provider_accepted');assert.equal(mixedCalls.length,2);assert.equal(mixedCalls[1].url,contract.endpoint);assert.ok(!Object.hasOwn(mixedCalls[1].payload,'message'));
+ assert.equal((await mixedRun(both.db,both.bucket,scope,mixedConfiguration)).state,'idle');
+ // A contract for the other group never consumes a footer record.
+ const footerOnly=fixture();await footerOnly.seed({...footerInput,idempotencyKey:crypto.randomUUID()});assert.equal((await footerOnly.dispatch(separateTransport)(footerOnly.db,footerOnly.bucket,scope,configuration())).state,'idle');
+ await both.service.erase(scope,footerKey,3,'requested',new Date(BASE*1000));assert.ok(!JSON.stringify(await both.record(footerKey)).includes(footerInput.message));
+ // Independent callers cannot obtain two leases or retry uncertain/sending rows.
+ const race=fixture(),raceKey=await race.seed(),run=race.dispatch(transport),countBeforeRace=calls.length;
+ const results=await Promise.all([run(race.db,race.bucket,scope,configuration()),run(race.db,race.bucket,scope,configuration())]);assert.equal(results.filter(x=>x.state==='provider_accepted').length,1);assert.equal(results.filter(x=>x.state==='conflict').length,1);assert.equal(calls.length,countBeforeRace+1);
+ for(const providerMode of ['bad','timeout']){mode=providerMode;const f=fixture(),key=await f.seed(),invoke=f.dispatch(transport),before=calls.length;r=clean(await invoke(f.db,f.bucket,scope,configuration()));assert.equal(r.state,'unknown');assert.equal((await f.record(key)).outbox.state,'unknown');assert.equal((await invoke(f.db,f.bucket,scope,configuration())).state,'idle');assert.equal(calls.length,before+1);}
+ mode='ack';
+ // Privacy/expiry is authoritative at claim/provider/settle, even after select.
+ const expired=fixture(),expiredKey=await expired.seed(input(),BASE-31*86400),beforeExpired=calls.length;r=await expired.dispatch(transport)(expired.db,expired.bucket,scope,configuration());assert.equal(r.state,'erased');assert.equal((await expired.record(expiredKey)).schema,2);assert.equal(calls.length,beforeExpired);
+ const erased=fixture(),erasedKey=await erased.seed(),beforeErased=calls.length;erased.afterFirst=async(sql)=>{if(sql.includes(' AS contactKey')){erased.afterFirst=null;await erased.privacy.ensure({schema:1,scope,key:erasedKey,erasedAt:new Date(BASE*1000).toISOString(),reason:'requested'});}};r=await erased.dispatch(transport)(erased.db,erased.bucket,scope,configuration());assert.equal(r.state,'erased');assert.equal((await erased.record(erasedKey)).schema,2);assert.equal(calls.length,beforeErased);
+ // Unknown privacy after a lease cannot permit a provider request or retry.
+ const unknown=fixture(),unknownKey=await unknown.seed(),beforeUnknown=calls.length;unknown.afterRun=async(sql,args)=>{if(sql.startsWith('UPDATE cms_settings')&&JSON.parse(args[0]).outbox?.state==='sending')unknown.bucket.failRead=true;};r=await unknown.dispatch(transport)(unknown.db,unknown.bucket,scope,configuration());assert.equal(r.state,'unavailable');assert.equal(calls.length,beforeUnknown);unknown.bucket.failRead=false;assert.equal((await unknown.record(unknownKey)).outbox.state,'sending');assert.equal((await unknown.dispatch(transport)(unknown.db,unknown.bucket,scope,configuration())).state,'idle');
+ // Erasure during an in-flight provider attempt still wins settlement; this
+ // deliberately makes no claim to retract that already initiated request.
+ const during=fixture(),duringKey=await during.seed(),beforeDuring=calls.length;r=await during.dispatch(async(...args)=>{const response=await transport(...args);await during.privacy.ensure({schema:1,scope,key:duringKey,erasedAt:new Date(BASE*1000).toISOString(),reason:'requested'});return response;})(during.db,during.bucket,scope,configuration());assert.equal(r.state,'erased');assert.equal(calls.length,beforeDuring+1);assert.equal((await during.record(duringKey)).schema,2);assert.equal((await during.dispatch(transport)(during.db,during.bucket,scope,configuration())).state,'idle');
+ // Recheck twelve-second gate after selection, after claim, before settle.
+ for(const stage of ['claim','provider','settle']){const f=fixture(),start=calendar.closed[0][0];f.now=start-13;const key=await f.seed(),before=calls.length;
+  if(stage==='claim')f.afterFirst=async sql=>{if(sql.includes(' AS contactKey'))f.now=start-12;};
+  if(stage==='provider')f.afterRun=async(sql,args)=>{if(sql.startsWith('UPDATE cms_settings')&&JSON.parse(args[0]).outbox?.state==='sending')f.now=start-12;};
+  const fetcher=stage==='settle'?async(...args)=>{const response=await transport(...args);f.now=start-12;return response;}:transport;
+  r=clean(await f.dispatch(fetcher)(f.db,f.bucket,scope,configuration()));assert.equal(r.state,'held',stage);assert.equal(calls.length,before+(stage==='settle'?1:0));assert.equal((await f.record(key)).outbox.state,stage==='claim'?'pending_routing':'sending');f.now=calendar.closed[0][1];if(stage!=='claim')assert.equal((await f.dispatch(transport)(f.db,f.bucket,scope,configuration())).state,'idle','held sending row never automatically retried after reopening');
+ }
+ // Actual signed machine gateway + its real existing lock, no fixture caller.
+ const gateway=fixture(),gatewayKey=await gateway.seed(),gatewayRun=gateway.dispatch(transport),secret='synthetic-gateway-only-'+'.'.repeat(48);
+ globalThis.__contactExecutionGatewayEnv={DB:gateway.db,BUCKET:gateway.bucket,...configuration(),CMS_EXECUTION_SECRET:secret,CMS_TENANT_ID:scope.tenantId,CMS_SITE_ID:scope.siteId,CMS_ADAPTER_MODE:'isolated-d1'};
+ let hookCalls=0;globalThis.__contactExecutionGatewayHook=async(...args)=>{hookCalls++;assert.equal(gateway.sqlite.prepare("SELECT count(*) n FROM cms_settings WHERE key='execution_gateway_lock'").get().n,1,'real signed gateway lock held before dispatcher');return gatewayRun(...args);};
+ const gatewayBundle=await build({stdin:{contents:`export {POST} from './app/api/machine/execution/route';`,resolveDir:root},bundle:true,write:false,format:'esm',platform:'node',target:'es2022',logLevel:'silent',plugins:[{name:'offline-bindings',setup(builder){
+ builder.onResolve({filter:/^(cloudflare:workers|@\/lib\/(?:access|cms|site-scope|contact-execution))$/},args=>({path:args.path,namespace:'gateway'}));
+ builder.onLoad({filter:/.*/,namespace:'gateway'},({path})=>({contents:path==='cloudflare:workers'?'export const env=globalThis.__contactExecutionGatewayEnv;':path.endsWith('/access')?'export class CmsError extends Error{constructor(status,message){super(message);this.status=status;}}export const authorizeCmsUser=async()=>{throw new CmsError(401,"no browser");};export const assertIsolatedD1Scope=async()=>{};':path.endsWith('/cms')?'export const getD1=()=>globalThis.__contactExecutionGatewayEnv.DB;export const requireSameOrigin=()=>{throw{status:403};};export const jsonError=e=>Response.json({error:"fixture_denied"},{status:e.status??500});':path.endsWith('/site-scope')?'export const siteScope=()=>({tenantId:"derech",siteId:"derech-main"});':'export const dispatchOneContact=(...args)=>globalThis.__contactExecutionGatewayHook(...args);',loader:'js'}));
+ }}]});
+ const {POST}=await import('data:text/javascript;base64,'+Buffer.from(gatewayBundle.outputFiles[0].text).toString('base64'));
+ const packet={schemaVersion:1,tasks:[],effects:[],report:{schemaVersion:1,...scope,sourceAt:new Date().toISOString(),jobs:[]}},raw=JSON.stringify(packet),time=String(Math.floor(Date.now()/1000));
+ const request=(signature=createHmac('sha256',secret).update(time+'\n'+raw).digest('hex'))=>new Request('https://review.local.invalid/api/machine/execution/',{method:'POST',body:raw,headers:{'content-type':'application/json','x-bridge-time':time,'x-bridge-signature':signature}});
+ let response=await POST(request('0'.repeat(64)));assert.equal(response.status,401);assert.equal(hookCalls,0);
+ mode='hold';const firstGateway=POST(request());while(!releaseProvider)await new Promise(resolve=>setTimeout(resolve,5));response=await POST(request());assert.equal(response.status,409);assert.equal(hookCalls,1,'overlapping signed packet cannot reach provider hook twice');releaseProvider();releaseProvider=undefined;response=await firstGateway;assert.equal(response.status,200);assert.equal((await gateway.record(gatewayKey)).outbox.state,'provider_accepted');assert.equal(gateway.sqlite.prepare("SELECT count(*) n FROM cms_settings WHERE key='execution_gateway_lock'").get().n,0);clean(await response.json());
+ console.log('PASS contact execution: real SQLite scoped max1, disabled/config/calendar zero-I/O gates, exact compiled-calendar SHA/121closures/12s horizon, immutable privacy/expiry, one CAS claim/provider attempt, malformed/stream-timeout unknown with no retry, action-time calendar closure freezes sending, actual HMAC machine gateway under real lock rejects forgery/overlap. Only loopback synthetic provider; no live integration verified.');
+}finally{releaseProvider?.();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));for(const sqlite of all)sqlite.close();delete globalThis.__contactExecutionGatewayEnv;delete globalThis.__contactExecutionGatewayHook;}
