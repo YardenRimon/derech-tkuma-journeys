@@ -16,10 +16,11 @@ try{
  const headers={'content-type':'application/pkcs7-mime','x-backup-time':time,'x-backup-created-at':created,'x-backup-size':String(bytes.length),'x-backup-sha256':sha,'x-backup-signature':await sign(secret,[protocol,'POST',origin,path,time,created,String(bytes.length),sha].join('\n'))};
  let response=await mf.dispatchFetch(origin+path,{method:'POST',body:bytes,headers});assert.equal(response.status,201,await response.clone().text());const raw=await response.text(),receipt=JSON.parse(raw);assert.equal(receipt.verified,true);assert.equal(receipt.duplicate,false);assert.equal(response.headers.get('x-backup-receipt-signature'),await sign(secret,receiptPurpose+'\n'+raw));
  response=await mf.dispatchFetch(origin+path,{method:'POST',body:bytes,headers});assert.equal(response.status,200,await response.clone().text());assert.equal((await response.json()).duplicate,true);
- const bucket=await mf.getR2Bucket('BACKUP_BUCKET');const stored=await bucket.get(receipt.key);assert(stored);assert.equal(await sha256(await stored.arrayBuffer()),sha);assert.equal((await bucket.list()).objects.length,1);
+ const bucket=await mf.getR2Bucket('BACKUP_BUCKET');const stored=await bucket.get(receipt.key);assert(stored);assert.equal(await sha256(await stored.arrayBuffer()),sha);assert.equal((await bucket.list()).objects.filter(o=>o.key.endsWith('.cms')).length,1);
  for(const method of ['GET','DELETE']){response=await mf.dispatchFetch(origin+path,{method});assert.equal(response.status,405);}
- assert.equal((await bucket.list()).objects.length,1);
+ assert.equal((await bucket.list()).objects.filter(o=>o.key.endsWith('.cms')).length,1);
  console.log('PASS actual local workerd/R2 conditional create-only PUT, duplicate no overwrite, independent stored-byte SHA256, signed receipt and external read/delete denial');
 }finally{if(mf)await mf.dispose();rmSync(directory,{recursive:true,force:true});}
 await import('./test-v1-resource-r2-local.mjs');
+await import('./test-fallback-r2-local.mjs');
 await import('./test-multipart-r2-local.mjs');

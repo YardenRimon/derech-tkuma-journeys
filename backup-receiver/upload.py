@@ -13,11 +13,15 @@ import sys
 import tempfile
 import time
 import urllib.request
+import urllib.error
 
 PROTOCOL = 'cms-ciphertext-upload-v1'
 RECEIPT_PURPOSE = 'cms-ciphertext-receipt-v1'
 PATH = '/v1/backups/derech/derech-main'
-MAX_BYTES = 16 * 1024 * 1024
+MAX_BYTES = 16 * 1024 * 1024  # legacy v1 verification bound
+V1_WRITE_MAX = 8 * 1024 * 1024
+VERIFY_PATH = PATH + '/verify-existing'
+VERIFY_PURPOSE = 'cms-ciphertext-verify-existing-v1'
 CONFIG = Path('/etc/yarden-cms-backup-upload.json')
 SCOPE = {'tenantId': 'derech', 'siteId': 'derech-main'}
 
@@ -87,6 +91,17 @@ def transport(request):
             return response.status, {k.lower(): v for k, v in response.headers.items()}, body
     except UploadError:
         raise
+    except urllib.error.HTTPError as error:
+        # Only this exact authenticated metadata lookup has a typed miss.
+        # All other HTTP failures remain fail-closed transport failures.
+        if error.code == 404 and request.full_url.endswith(VERIFY_PATH):
+            with error:
+                require(error.geturl() == request.full_url, 'response_origin_rejected')
+                body = error.read(16385)
+                require(len(body) <= 16384, 'receipt_rejected')
+                return 404, {k.lower():v for k,v in error.headers.items()}, body
+        error.close()
+        raise UploadError('upload_transport_failed') from None
     except Exception:
         raise UploadError('upload_transport_failed') from None
 
@@ -110,9 +125,13 @@ def upload_cipher(config_path, archive, created, *, expected_sha, expected_size,
     except (TypeError, ValueError):
         raise UploadError('capture_time_rejected') from None
     now = int(clock()); require(-120 <= now - stamp.timestamp() <= 7*86400, 'capture_time_rejected')
-    if type(expected_size) is int and expected_size > MAX_BYTES:
+    if type(expected_size) is int and expected_size > V1_WRITE_MAX:
+        if expected_size <= MAX_BYTES:
+            receipt = verify_legacy_existing(config, archive, created, expected_sha, expected_size, send=send, clock=clock, gate=gate, owner_uid=owner_uid, check=check)
+            if receipt is not None:
+                return receipt
         return upload_multipart(config_path, archive, created, expected_sha=expected_sha, expected_size=expected_size, send=send, clock=clock, gate=gate, owner_uid=owner_uid, check=check)
-    data = private_bytes(archive, MAX_BYTES, owner_uid=owner_uid)
+    data = private_bytes(archive, V1_WRITE_MAX, owner_uid=owner_uid)
     sha = hashlib.sha256(data).hexdigest()
     require(type(expected_size) is int and len(data) == expected_size and sha == expected_sha, 'archive_identity_rejected')
     check(archive)
@@ -129,6 +148,10 @@ def upload_cipher(config_path, archive, created, *, expected_sha, expected_size,
         raise
     except Exception:
         raise UploadError('upload_transport_failed') from None
+    return v1_receipt(config, status, headers, raw, created, len(data), sha)
+
+
+def v1_receipt(config, status, headers, raw, created, size, sha, *, duplicate_only=False):
     require(status in (200, 201) and len(raw) <= 16384, 'receipt_rejected')
     receipt_signature = headers.get('x-backup-receipt-signature', '')
     expected_signature = hmac.new(bytes.fromhex(config['secret']), RECEIPT_PURPOSE.encode()+b'\n'+raw, hashlib.sha256).hexdigest()
@@ -138,9 +161,41 @@ def upload_cipher(config_path, archive, created, *, expected_sha, expected_size,
     except Exception:
         raise UploadError('receipt_rejected') from None
     require(isinstance(receipt, dict) and set(receipt) == {'protocol','scope','key','createdAt','ciphertextBytes','ciphertextSha256','objectEtag','objectVersion','verified','duplicate'}, 'receipt_rejected')
-    require(receipt['protocol'] == PROTOCOL and receipt['scope'] == SCOPE and receipt['key'] == object_key(created, sha) and receipt['createdAt'] == created and type(receipt['ciphertextBytes']) is int and receipt['ciphertextBytes'] == len(data) and receipt['ciphertextSha256'] == sha and receipt['verified'] is True and type(receipt['duplicate']) is bool, 'receipt_identity_rejected')
+    require(receipt['protocol'] == PROTOCOL and receipt['scope'] == SCOPE and receipt['key'] == object_key(created, sha) and receipt['createdAt'] == created and type(receipt['ciphertextBytes']) is int and receipt['ciphertextBytes'] == size and receipt['ciphertextSha256'] == sha and receipt['verified'] is True and type(receipt['duplicate']) is bool, 'receipt_identity_rejected')
     require(all(isinstance(receipt[k], str) and 1 <= len(receipt[k]) <= 256 and all(32 <= ord(c) <= 126 for c in receipt[k]) for k in ('objectEtag','objectVersion')), 'receipt_rejected')
+    require(not duplicate_only or status == 200 and receipt['duplicate'] is True, 'receipt_identity_rejected')
     return receipt
+
+
+def verify_legacy_existing(config, archive, created, sha, size, *, send, clock, gate, owner_uid, check):
+    require(type(size) is int and V1_WRITE_MAX < size <= MAX_BYTES and isinstance(sha,str) and re.fullmatch(r'[a-f0-9]{64}',sha), 'archive_identity_rejected')
+    stream, info = private_stream(archive, maximum=MAX_BYTES, owner_uid=owner_uid)
+    with stream:
+        manifest = stream_manifest(stream, created)
+        require(manifest['ciphertextBytes']==size and manifest['ciphertextSha256']==sha, 'archive_identity_rejected')
+        (streaming_der_check if check is openssl_check else check)(archive)
+        require(file_identity(info)==file_identity(os.fstat(stream.fileno()))==file_identity(Path(archive).stat()), 'private_file_changed')
+        now = str(int(clock()))
+        message = '\n'.join([VERIFY_PURPOSE,'POST',config['origin'],VERIFY_PATH,now,created,str(size),sha])
+        signature = hmac.new(bytes.fromhex(config['secret']),message.encode(),hashlib.sha256).hexdigest()
+        request = urllib.request.Request(config['origin']+VERIFY_PATH,data=b'{}',method='POST',headers={'User-Agent':'YardenCMS-EncryptedBackup/1.0','Content-Type':'application/json','x-backup-time':now,'x-backup-created-at':created,'x-backup-size':str(size),'x-backup-sha256':sha,'x-backup-signature':signature})
+        require(gate() is True, 'sacred_time_closed')
+        try:
+            status, headers, raw = send(request)
+        except UploadError:
+            raise
+        except Exception:
+            raise UploadError('upload_transport_failed') from None
+        require(file_identity(info)==file_identity(os.fstat(stream.fileno()))==file_identity(Path(archive).stat()), 'private_file_changed')
+        if status == 404:
+            require(len(raw)<=16384, 'receipt_rejected')
+            try:
+                value=json.loads(raw)
+            except Exception:
+                raise UploadError('receipt_rejected') from None
+            require(type(value) is dict and set(value)=={'ok','code'} and value['ok'] is False and value['code']=='existing_v1_not_found', 'receipt_rejected')
+            return None
+        return v1_receipt(config,status,headers,raw,created,size,sha,duplicate_only=True)
 
 
 def atomic_json(path, value):
@@ -163,7 +218,7 @@ def finalize_backup(report, base, *, config_path=CONFIG, uploader=upload_cipher)
     try:
         receipt = uploader(config_path, archive, report['createdAt'], expected_sha=report['ciphertextSha256'], expected_size=report['ciphertextBytes'])
         require(isinstance(receipt, dict) and receipt.get('verified') is True and receipt.get('scope') == SCOPE and receipt.get('ciphertextSha256') == report['ciphertextSha256'] and receipt.get('ciphertextBytes') == report['ciphertextBytes'] and receipt.get('key') == object_key(report['createdAt'],report['ciphertextSha256']), 'receipt_identity_rejected')
-        if report['ciphertextBytes']>MAX_BYTES:
+        if receipt.get('protocol')==MULTIPART_PROTOCOL or report['ciphertextBytes']>MAX_BYTES:
             require(receipt.get('protocol')==MULTIPART_PROTOCOL and receipt.get('independentReadbackVerified') is True and receipt.get('readbackBytes')==report['ciphertextBytes'] and receipt.get('readbackSha256')==report['ciphertextSha256'], 'stored_copy_unverified')
     except Exception as error:
         held=isinstance(error,UploadError) and str(error)=='sacred_time_closed'
@@ -295,7 +350,7 @@ def upload_multipart(config_path, archive, created, *, expected_sha, expected_si
     except (TypeError,ValueError):
         raise UploadError('capture_time_rejected') from None
     require(-120 <= clock()-stamp.timestamp() <= 7*86400, 'capture_time_rejected')
-    require(type(expected_size) is int and MAX_BYTES < expected_size <= TOTAL_BYTES and isinstance(expected_sha,str) and re.fullmatch(r'[a-f0-9]{64}',expected_sha), 'archive_identity_rejected')
+    require(type(expected_size) is int and V1_WRITE_MAX < expected_size <= TOTAL_BYTES and isinstance(expected_sha,str) and re.fullmatch(r'[a-f0-9]{64}',expected_sha), 'archive_identity_rejected')
     stream, info = private_stream(archive, owner_uid=owner_uid)
     with stream:
         manifest = stream_manifest(stream, created)
@@ -420,7 +475,7 @@ def operator_recovery_copy(archive, created, *, expected_sha, expected_size, bas
         try:
             receipt=uploader(config_path,archive,created,expected_sha=expected_sha,expected_size=expected_size)
             require(isinstance(receipt,dict) and receipt.get('verified') is True and receipt.get('scope')==SCOPE and receipt.get('key')==object_key(created,expected_sha) and receipt.get('ciphertextBytes')==expected_size and receipt.get('ciphertextSha256')==expected_sha, 'receipt_identity_rejected')
-            if expected_size>MAX_BYTES:
+            if receipt.get('protocol')==MULTIPART_PROTOCOL or expected_size>MAX_BYTES:
                 require(receipt.get('protocol')==MULTIPART_PROTOCOL and receipt.get('independentReadbackVerified') is True and receipt.get('readbackBytes')==expected_size and receipt.get('readbackSha256')==expected_sha, 'stored_copy_unverified')
         except Exception as error:
             held=isinstance(error,UploadError) and str(error)=='sacred_time_closed'
