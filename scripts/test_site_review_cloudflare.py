@@ -128,8 +128,14 @@ class CloudflareAlertTests(unittest.TestCase):
         with self.assertRaisesRegex(self.cf.AlertError, 'scope_invalid'): self.process(self.cf, snapshot(NATIVE))
         with self.assertRaisesRegex(self.cf.AlertError, 'sacred_time_closed'): self.process(self.cf, snapshot(CF), gate=lambda now: False)
         self.assertEqual(self.process(self.cf, snapshot(CF, span=899))['state'], 'observing')
-        self.assertEqual(self.process(self.cf, snapshot(CF, code='transport_failed'))['state'], 'internal_only')
+        self.assertEqual(self.process(self.cf, snapshot(CF, code='transport_failed',span=899))['state'], 'observing')
         with sqlite3.connect(self.db) as db: self.assertEqual(db.execute('SELECT COUNT(*) FROM outbox').fetchone()[0], 0)
+        result=self.process(self.cf, snapshot(CF, code='transport_failed'))
+        self.assertEqual(result['notices'][0]['state'],'queued')
+        with sqlite3.connect(self.db) as db:
+            rows=db.execute('SELECT chat_id,text FROM outbox').fetchall()
+            self.assertEqual(len(rows),1);self.assertEqual(rows[0][0],self.cf.OWNER)
+            self.assertIn(CF,rows[0][1]);self.assertNotIn(NATIVE,rows[0][1])
 
 class TargetsRunnerTests(unittest.TestCase):
     def setUp(self): self.r = load('dual_target_runner', 'site-review-targets-runner.py')
@@ -139,6 +145,8 @@ class TargetsRunnerTests(unittest.TestCase):
         self.assertIn('/etc/yarden-site-monitor.json', native)
         self.assertIn('--public-only', cf); self.assertNotIn('--service-config', cf)
         self.assertIn('/var/lib/yarden-site-monitor/cloudflare-state.json', cf)
+        self.assertIn('/opt/yarden-site-monitor/site-release.json', cf)
+        self.assertIn('/opt/yarden-site-monitor/site-release-sites.json', native)
         self.assertNotIn('/etc/yarden-answer-cms.json', native + cf)
         with self.assertRaises(ValueError): self.r.command('monitor', 'other')
 

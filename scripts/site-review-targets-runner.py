@@ -23,7 +23,7 @@ def command(kind, target):
     state = STATE / ('state.json' if target == 'sites' else 'cloudflare-state.json')
     args = ['/usr/bin/python3', str(BASE / ('site-review-monitor.py' if kind == 'monitor' else 'site-review-alerts.py')), '--target', target, '--state', str(state)]
     if kind == 'monitor':
-        args += ['--release-file', str(BASE / 'site-release.json')]
+        args += ['--release-file', str(BASE / ('site-release-sites.json' if target == 'sites' else 'site-release.json'))]
         args += ['--service-config', '/etc/yarden-site-monitor.json'] if target == 'sites' else ['--public-only']
     else:
         args += ['--ops-directory', str(BASE / 'ops')]
