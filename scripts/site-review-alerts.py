@@ -34,6 +34,7 @@ CODES = {'ok', 'http_status', 'health_mismatch', 'noindex_missing', 'asset_misma
          'probe_target_rejected', 'probe_failed', 'transport_failed'}
 STATES = {'queued', 'sending', 'sent', 'unknown', 'failed'}
 ACTIONS = {
+ 'inspect_review_availability': ('אתר הבדיקה אינו זמין באופן תקין בבדיקות החיצוניות.', 'לבדוק זמינות, הרשאות גישה ופריסה אצל ספק האירוח; אין לשנות את הדומיין הפעיל.'),
  'restore_review_noindex': ('חסימת האינדוקס חסרה באתר הבדיקה.', 'להחזיר noindex בכותרת HTTP ובתגית robots בעמודי הבדיקה ולפרוס גרסה מתוקנת.'),
  'inspect_review_release': ('בדיקת הגרסה ומוכנות המערכת של אתר הבדיקה אינה תקינה.', 'לבדוק את פריסת אתר הבדיקה מול גרסת התוכן המאושרת ואת מוכנות מסד הנתונים.'),
  'restore_review_asset': ('קובץ התצוגה שנבדק באתר הבדיקה שונה מהגרסה המאושרת.', 'להחזיר מהגרסה המאושרת את hooks.min.js ולבדוק התאמה לחתימה.'),
@@ -108,7 +109,8 @@ def actions(item):
     return {action for action, present in (
         ('restore_review_noindex', codes['home'] == 'noindex_missing' or codes['interior'] == 'noindex_missing'),
         ('inspect_review_release', codes['health'] == 'health_mismatch'),
-        ('restore_review_asset', codes['asset'] == 'asset_mismatch')) if present}
+        ('restore_review_asset', codes['asset'] == 'asset_mismatch'),
+        ('inspect_review_availability', any(code in {'http_status','transport_failed','probe_failed','redirect_rejected','response_origin_mismatch'} for code in codes.values()))) if present}
 
 def qualifying(history, action):
     """Action-specific persistence: earlier unrelated failures cannot age it."""

@@ -94,8 +94,18 @@ class AdapterTests(unittest.TestCase):
         value = snapshot(span=1800, count=3)
         self.assertEqual(self.run_adapter(value)['state'], 'observing'); self.assertEqual(self.rows(), [])
 
-    def test_generic_provider_and_auth_failures_internal_only(self):
-        for code in ('http_status', 'transport_failed', 'redirect_rejected', 'response_origin_mismatch'):
+    def test_persistent_availability_uses_one_private_notice_without_provider_details(self):
+        for code in ('http_status', 'transport_failed', 'probe_failed', 'redirect_rejected', 'response_origin_mismatch'):
+            result = self.run_adapter(snapshot(code))
+            self.assertEqual(len(result['notices']), 1)
+        rows = self.rows(); self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['chat_id'], a.OWNER)
+        self.assertIn('אינו זמין', rows[0]['text'])
+        self.assertNotIn('403', rows[0]['text'])
+
+    def test_transient_availability_and_configuration_rejections_do_not_notify(self):
+        self.assertEqual(self.run_adapter(snapshot('transport_failed', span=899))['state'], 'observing')
+        for code in ('probe_target_rejected', 'response_too_large'):
             self.assertEqual(self.run_adapter(snapshot(code))['state'], 'internal_only')
         self.assertEqual(self.rows(), [])
 

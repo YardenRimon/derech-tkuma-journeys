@@ -15,6 +15,15 @@ try{
  mf=new Miniflare({modules:true,scriptPath:new URL('./worker.mjs',import.meta.url).pathname,compatibilityDate:'2026-05-22',r2Buckets:{BACKUP_BUCKET:'local-multipart-only'},bindings:{BACKUP_UPLOAD_ENABLED:'true',BACKUP_RECEIVER_ORIGIN:origin,BACKUP_UPLOAD_HMAC:secret}});
  const bucket=await mf.getR2Bucket('BACKUP_BUCKET');
  async function call(action,{body=encode.encode('{}'),session=id,part=0,path=multipartPath+'/'+action,time=String(Math.floor(Date.now()/1000)),key=secret,extras={},digest}={}){const size=String(body.length),sha=digest??await sha256(body),headers={'content-type':action==='part'?'application/pkcs7-mime':'application/json','x-backup-time':time,'x-backup-session':session,'x-backup-part':String(part),'x-backup-size':size,'x-backup-sha256':sha,'x-backup-signature':await sign(key,multipartMessage(action,origin,time,session,String(part),size,sha)),...extras};return mf.dispatchFetch(origin+path,{method:'POST',body,headers});}
+ // Linux may reset a deliberately unconsumed large rejected upload before
+ // delivering its error status. This negative-only check also proves every
+ // persisted object/version is unchanged; positive receipts never use it.
+ async function deniedPart(opts,status){
+  const snapshot=async()=>{const r=await bucket.list({limit:1000});assert(!r.truncated);return r.objects.map(({key,version,etag,size})=>({key,version,etag,size}));},before=await snapshot();
+  try{assert.equal((await call('part',opts)).status,status);}
+  catch(error){assert.equal(error?.message,'fetch failed');assert.equal(error?.cause?.code,'ECONNRESET');}
+  assert.deepEqual(await snapshot(),before,'rejected part cannot mutate persistent state');
+ }
  async function ok(action,opts,status=200){const r=await call(action,opts);assert.equal(r.status,status,await r.clone().text());const raw=await r.text();assert.equal(r.headers.get('x-backup-receipt-signature'),await sign(secret,`cms-ciphertext-${action}-receipt-v2\n${raw}`));return JSON.parse(raw);}
  const initial=await ok('create',{body:rawManifest},201);assert.equal(initial.key,objectKey(created,sha));assert.equal(initial.manifestSha256,await sha256(rawManifest));
  assert.deepEqual(await ok('create',{body:rawManifest}),initial);
@@ -23,10 +32,10 @@ try{
  const over=structuredClone(manifest);over.ciphertextBytes=4*1024*1024*1024+1;assert.equal((await call('create',{body:encode.encode(manifestText(over))})).status,413);
  assert.equal((await call('complete')).status,409,'incomplete upload must not publish');assert.equal(await bucket.head(initial.key),null);
  const first=bytes.slice(0,partBytes),tampered=Uint8Array.from(first);tampered[512]^=1;
- assert.equal((await call('part',{body:tampered,part:1,digest:parts[0].sha256})).status,422);
- assert.equal((await call('part',{body:tampered,part:1})).status,409);
- assert.equal((await call('part',{body:new Uint8Array(partBytes+1),part:1})).status,413);
- assert.equal((await call('part',{body:first,part:1,session:'0'.repeat(64)})).status,404);
+ await deniedPart({body:tampered,part:1,digest:parts[0].sha256},422);
+ await deniedPart({body:tampered,part:1},409);
+ await deniedPart({body:new Uint8Array(partBytes+1),part:1},413);
+ await deniedPart({body:first,part:1,session:'0'.repeat(64)},404);
  const p1=await ok('part',{body:first,part:1},201);assert.deepEqual(await ok('part',{body:first,part:1}),p1);
  // Resume exact same session after a deliberately interrupted partial upload.
  const resumed=await ok('create',{body:rawManifest});assert.deepEqual(resumed.uploadedParts,[1]);assert.equal(resumed.storedComplete,false);
