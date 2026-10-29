@@ -21,3 +21,5 @@ try{
  assert.equal((await bucket.list()).objects.length,1);
  console.log('PASS actual local workerd/R2 conditional create-only PUT, duplicate no overwrite, independent stored-byte SHA256, signed receipt and external read/delete denial');
 }finally{if(mf)await mf.dispose();rmSync(directory,{recursive:true,force:true});}
+await import('./test-v1-resource-r2-local.mjs');
+await import('./test-multipart-r2-local.mjs');

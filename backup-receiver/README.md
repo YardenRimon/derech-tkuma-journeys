@@ -1,5 +1,7 @@
 # Private encrypted backup receiver
 
+Locally prepared growth extension: [bounded multipart v2](MULTIPART.md) preserves v1 for ≤16 MiB and adds authenticated encrypted readback for larger archives. The protocol sections below describe the existing v1 deployment. v2 reuses the already approved existing HMAC/bucket/runner; it requires no new key or provider setting. Local tests are not a deployment claim. The [same-receiver rollout and manual recovery-artifact recipe](OPERATOR-ROLLOUT.md) includes exact file hashes and the remaining large outer-DER preparation gate.
+
 This is a separate purpose-scoped Worker, not a route or binding added to the CMS Worker. It accepts uploads only into the existing owner's intended **private** bucket `derech-tkuma-backups`. The media bucket is separate. The example stays disabled by default. Owner-authorized provisioning was completed separately on2026-10-19: a separate live Worker, private backup bucket and independent upload HMAC were installed. A scheduled capture and signed receipt succeeded; an independent provider download, ciphertext hash check, owner-key decrypt and isolated104-row restore passed. This is implementation evidence for the owner deployment, not a claim that running this source provisions resources.
 
 ## Minimal authority

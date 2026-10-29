@@ -1,3 +1,4 @@
+import {receiveMultipart,multipartPath} from './multipart-core.mjs';
 /** Purpose-scoped encrypted backup ingress. No external read/list/delete API. */
 export const protocol='cms-ciphertext-upload-v1',receiptPurpose='cms-ciphertext-receipt-v1';
 export const path='/v1/backups/derech/derech-main',maxBytes=16*1024*1024;
@@ -25,8 +26,26 @@ export function checkEncryptedDer(bytes){
  for(let i=envelope.start;i<=envelope.end-aes.length;i++)if(aes.every((x,j)=>bytes[i+j]===x)){found=true;break;}
  require(found,422,'aes256_envelope_required');
 }
-async function readBody(request,expected){const reader=request.body?.getReader();require(reader,400,'empty_body');const chunks=[];let total=0;for(;;){const{done,value}=await reader.read();if(done)break;total+=value.byteLength;if(total>maxBytes||total>expected){await reader.cancel();throw new Rejected(413,'body_limit');}chunks.push(value);}require(total===expected,400,'size_mismatch');const bytes=new Uint8Array(total);let at=0;for(const chunk of chunks){bytes.set(chunk,at);at+=chunk.length;}return bytes;}
+async function readBody(request,expected){
+ const reader=request.body?.getReader();require(reader,400,'empty_body');
+ // The authenticated size is already bounded. Keep one owned input allocation,
+ // rather than retaining every source chunk and then allocating a second copy.
+ const bytes=new Uint8Array(expected);let total=0,finished=false;
+ try{for(;;){const{done,value}=await reader.read();if(done){finished=true;break;}require(value instanceof Uint8Array,400,'size_mismatch');require(value.byteLength<=expected-total&&value.byteLength<=maxBytes-total,413,'body_limit');bytes.set(value,total);total+=value.byteLength;}require(total===expected,400,'size_mismatch');return bytes;}
+ finally{if(!finished)void reader.cancel().catch(()=>{});reader.releaseLock();}
+}
+async function verifyStoredBody(body,expected,sha){
+ require(body&&typeof body.pipeThrough==='function',502,'stored_copy_unverified');
+ // Workers' native incremental digest consumes the independently fetched R2
+ // bytes. No arrayBuffer/retained chunks/full second ciphertext allocation, and
+ // no production fallback that could weaken stored-byte verification.
+ const digest=new crypto.DigestStream('SHA-256');let total=0;
+ const result=digest.digest;void result.catch(()=>{});
+ try{await body.pipeThrough(new TransformStream({transform(chunk,controller){require(chunk instanceof Uint8Array&&chunk.byteLength<=expected-total,502,'stored_copy_unverified');total+=chunk.byteLength;controller.enqueue(chunk);}})).pipeTo(digest);require(total===expected&&hex(await result)===sha,502,'stored_copy_unverified');}
+ catch{throw new Rejected(502,'stored_copy_unverified');}
+}
 export async function receive(request,env,now=Date.now()){
+ if(new URL(request.url).pathname.startsWith(multipartPath+'/'))return receiveMultipart(request,env,now);
  try{
   const url=new URL(request.url);
   require(request.method==='POST',405,'method_not_allowed');
@@ -50,7 +69,7 @@ export async function receive(request,env,now=Date.now()){
   require(object&&object.key===storageKey&&object.size===size&&Object.entries(metadata).every(([k,v])=>object.customMetadata?.[k]===v),409,'stored_object_conflict');
   const copy=await env.BACKUP_BUCKET.get(storageKey,{onlyIf:{etagMatches:object.etag}});
   require(copy&&copy.body&&copy.size===size&&copy.etag===object.etag,502,'stored_copy_unverified');
-  const returned=new Uint8Array(await copy.arrayBuffer());require(returned.byteLength===size&&await sha256(returned)===sha,502,'stored_copy_unverified');
+  await verifyStoredBody(copy.body,size,sha);
   const receipt={protocol,scope,key:storageKey,createdAt:created,ciphertextBytes:size,ciphertextSha256:sha,objectEtag:object.etag,objectVersion:object.version,verified:true,duplicate:stored===null};
   const raw=JSON.stringify(receipt),receiptSignature=await sign(env.BACKUP_UPLOAD_HMAC,receiptPurpose+'\n'+raw);
   return new Response(raw,{status:stored?201:200,headers:{...headers,'content-type':'application/json','x-backup-receipt-signature':receiptSignature}});
