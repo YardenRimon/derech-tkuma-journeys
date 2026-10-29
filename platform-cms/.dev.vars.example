@@ -1,8 +1,8 @@
 # Loopback development fixture only. Production owner must be explicitly provisioned.
 CMS_OWNER_EMAIL=seedy@sites.test
 CMS_ADAPTER_MODE=isolated-d1
-CMS_TENANT_ID=local-demo-tenant
-CMS_SITE_ID=local-demo-site
+CMS_TENANT_ID=derech
+CMS_SITE_ID=derech-main
 # Optional explicitly provisioned administrators, separate from content editors.
 CMS_ADMIN_EMAILS=admin2@sites.test
 CMS_EDITOR_EMAILS=editor@sites.test
