@@ -9,6 +9,7 @@ import { chatGPTSignOutPath, getAuthProvider } from "@/app/chatgpt-auth";
 type Props = { children: ReactNode; active: string; title: string; description?: string; email?: string | null; role?: string; id?: string; className?: string; canPublish?: boolean; currentEmail?: string };
 const links = [
   { href: "/admin/dashboard", label: "תמונת מצב", icon: LayoutDashboard, admin: true },
+  { href: "/admin/readiness", label: "חיבורים ומוכנות", icon: ClipboardList, admin: true },
   { href: "/admin", label: "עמודי האתר", icon: FilePenLine },
   { href: "/admin/collections", label: "סיורים ומועדים", icon: MapPinned },
   { href: "/admin/tasks", label: "שאלות ומשימות", icon: ClipboardList },

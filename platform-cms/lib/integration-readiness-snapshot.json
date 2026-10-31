@@ -1,0 +1,340 @@
+{
+  "schema": 1,
+  "snapshotAt": "2026-10-31T21:57:57Z",
+  "stage": "local-preparation",
+  "reviewOrigin": "https://derech-tkuma-review.22yarden22.workers.dev",
+  "deployedCommit": "0790a874540d286de213b764cce316e4ab22631f",
+  "connections": [
+    {
+      "id": "review",
+      "title": "אתר הבדיקה והפריסה",
+      "status": "live_verified",
+      "checkedAt": "2026-10-31T21:40:48Z",
+      "evidence": [
+        {
+          "label": "מסמך מסירה וראיות מתוארכות",
+          "reference": "docs/cutover-handoff-2026-11-01.md"
+        }
+      ],
+      "missing": "לא חסר לצורך המשך הבדיקה; הגרסה המקומית החדשה טרם נפרסה",
+      "owner": "פיתוח",
+      "nextStep": "להמשיך סקירה בכתובת הבדיקה הקיימת; אין לבצע דחיפה שמפעילה פריסה",
+      "impact": "גרסת הבדיקה זמינה עם חסימת אינדוקס; זו אינה הוכחת מוכנות למעבר",
+      "asset": "Cloudflare review / 51 עמודי מקור",
+      "capability": "צפייה באתר הבדיקה ובדיקת בריאות",
+      "technicalStatus": "verified_read",
+      "requiredFor": "staff_operations",
+      "fallback": "המשך האתר המקורי והניהול בכתובת הבדיקה הקיימת; אין שינוי דומיין או תהליך עסקי"
+    },
+    {
+      "id": "cms-identity",
+      "title": "ניהול תוכן והזדהות",
+      "status": "historical",
+      "checkedAt": "2026-10-29T05:01:00Z",
+      "evidence": [
+        {
+          "label": "מסמך מסירה וראיות מתוארכות",
+          "reference": "docs/cutover-handoff-2026-11-01.md"
+        }
+      ],
+      "missing": "כניסה עצמאית של רזיאל ובדיקת מכשיר אמיתי טרם תועדו; מצב הזהות מדווח תקין כעת",
+      "owner": "פיתוח ורזיאל",
+      "nextStep": "להיכנס בחשבון מורשה ולוודא עריכה, טיוטה ופרסום; אין לשנות הרשאות",
+      "impact": "ניהול התוכן נבדק; אין להציג כניסה של חשבון אחר כאילו אומתה",
+      "asset": "זהות MVP משותפת / הרשאות אתר דרך התקומה",
+      "capability": "כניסה וניהול תוכן",
+      "technicalStatus": "configured_unverified",
+      "requiredFor": "staff_operations",
+      "fallback": "המשך האתר המקורי והניהול בכתובת הבדיקה הקיימת; אין שינוי דומיין או תהליך עסקי"
+    },
+    {
+      "id": "wordpress",
+      "title": "מקור WordPress",
+      "status": "live_verified",
+      "checkedAt": "2026-10-31T21:40:48Z",
+      "evidence": [
+        {
+          "label": "מסמך מסירה וראיות מתוארכות",
+          "reference": "docs/cutover-handoff-2026-11-01.md"
+        }
+      ],
+      "missing": "נדרש אימות ניתוב המקור תחת תצורת הדומיין המיועדת",
+      "owner": "פיתוח",
+      "nextStep": "לשמור את שרת המקור ומסדו; לאמת Host, תעודה, כתובות וסשן לפני כל שינוי ניתוב",
+      "impact": "המקור זמין; הוא נשאר הסמכות לתהליכים העסקיים",
+      "asset": "derech-tkuma.com / WordPress המקורי",
+      "capability": "זמינות אתר המקור",
+      "technicalStatus": "verified_read",
+      "requiredFor": "public_continuity",
+      "fallback": "המשך האתר המקורי והניהול בכתובת הבדיקה הקיימת; אין שינוי דומיין או תהליך עסקי"
+    },
+    {
+      "id": "dns-mail",
+      "title": "דומיין, DNS ודואר",
+      "status": "blocked",
+      "checkedAt": "2026-10-31T21:47:09Z",
+      "evidence": [
+        {
+          "label": "מסמך מסירה וראיות מתוארכות",
+          "reference": "docs/cutover-handoff-2026-11-01.md"
+        }
+      ],
+      "missing": "משימה 30 עדיין ממתינה ללא תשובה; חסרים גישה מאומתת וייצוא מלא של רשומות הדומיין",
+      "owner": "רזיאל וירדן",
+      "nextStep": "להשלים את משימה 30 במערכת הקיימת; לייצא DNS מלא ולתעד הרשאת שינוי וספק דואר",
+      "impact": "אין לשנות רשומות או שרתי שמות לפני בדיקה וקבלה; דואר המקור חייב להישמר",
+      "asset": "derech-tkuma.com / AWS Route53 / MX Vangus",
+      "capability": "שימור כתובות האתר והדואר",
+      "technicalStatus": "awaiting_owner",
+      "requiredFor": "public_continuity",
+      "fallback": "המשך האתר המקורי והניהול בכתובת הבדיקה הקיימת; אין שינוי דומיין או תהליך עסקי"
+    },
+    {
+      "id": "source-routing",
+      "title": "ניתוב רציפות למערכת הקיימת",
+      "status": "local_verified",
+      "checkedAt": "2026-10-31T21:57:57Z",
+      "evidence": [
+        {
+          "label": "מסמך מסירה וראיות מתוארכות",
+          "reference": "docs/cutover-handoff-2026-11-01.md"
+        }
+      ],
+      "missing": "המתאם המקומי כבוי; הוכחות ניתוב מקור וחיבורים ואישור מעבר עדיין חסרים",
+      "owner": "פיתוח",
+      "nextStep": "להשלים בדיקות המקור בתצורה המאושרת; לקבע ראיות וקוד ורק אז להכין הפעלה נפרדת",
+      "impact": "אין מערכת הזמנות חדשה; פעולות המקור מועברות פעם אחת ללא פירוש מחדש",
+      "asset": "WordPress המקורי / נתיבי Woo ו־Elementor",
+      "capability": "רציפות פעולות המקור אחרי ניתוב",
+      "technicalStatus": "configured_unverified",
+      "requiredFor": "public_continuity",
+      "fallback": "המשך האתר המקורי והניהול בכתובת הבדיקה הקיימת; אין שינוי דומיין או תהליך עסקי"
+    },
+    {
+      "id": "forms-make",
+      "title": "טפסי מקור, מייל ו־Make",
+      "status": "blocked",
+      "checkedAt": "2026-10-31T21:47:09Z",
+      "evidence": [
+        {
+          "label": "מסמך מסירה וראיות מתוארכות",
+          "reference": "docs/cutover-handoff-2026-11-01.md"
+        }
+      ],
+      "missing": "העברת טופס ותוצאת משלוח מקצה לקצה לא אומתו בחי; משימה 31 ללא תשובה",
+      "owner": "רזיאל לגישות; פיתוח לבדיקה",
+      "nextStep": "להשלים גישת החיבורים הקיימים, לבדוק nonce טרי ותוצאת בדיקה מאושרת במערכת הקיימת",
+      "impact": "אסור להציג הצלחת פנייה לפני אישור מהמערכת המקורית; אין צינור מייל חלופי חדש",
+      "asset": "טפסי המקור 13 / 1489 / 18 / 5133 / 5982",
+      "capability": "קליטת פניות ותוצאת מייל ו־Make",
+      "technicalStatus": "awaiting_owner",
+      "requiredFor": "public_continuity",
+      "fallback": "המשך האתר המקורי והניהול בכתובת הבדיקה הקיימת; אין שינוי דומיין או תהליך עסקי"
+    },
+    {
+      "id": "grow",
+      "title": "Grow והרשמה קיימת",
+      "status": "blocked",
+      "checkedAt": "2026-10-31T21:47:09Z",
+      "evidence": [
+        {
+          "label": "מסמך מסירה וראיות מתוארכות",
+          "reference": "docs/cutover-handoff-2026-11-01.md"
+        }
+      ],
+      "missing": "גישת Grow והוכחת רציפות המסלול הקיים עדיין חסרות; משימה 31 ללא תשובה",
+      "owner": "רזיאל לגישה; פיתוח וספק לבדיקת רציפות",
+      "nextStep": "לאמת את כתובות החזרה וההתראות הקיימות מול התוסף המקורי; אין חיוב או רכישה במסגרת ההכנה",
+      "impact": "WordPress נשאר הכותב העסקי; אין החלפת סליקה או פתיחת איקומרס חדש",
+      "asset": "חשבון Grow הקיים / תוסף WordPress המקורי",
+      "capability": "הרשמה, סליקה ותגובות תשלום קיימות",
+      "technicalStatus": "awaiting_owner",
+      "requiredFor": "public_continuity",
+      "fallback": "המשך האתר המקורי והניהול בכתובת הבדיקה הקיימת; אין שינוי דומיין או תהליך עסקי"
+    },
+    {
+      "id": "measurement",
+      "title": "מדידה קיימת ו־SEO",
+      "status": "blocked",
+      "checkedAt": "2026-10-31T21:47:09Z",
+      "evidence": [
+        {
+          "label": "מסמך מסירה וראיות מתוארכות",
+          "reference": "docs/cutover-handoff-2026-11-01.md"
+        }
+      ],
+      "missing": "הרשאות נכסי המקור ובדיקת הסכמה ושליחת אירועים בחי טרם הושלמו",
+      "owner": "רזיאל וחוי לגישה; פיתוח לאימות",
+      "nextStep": "להשלים משימה 31 ואת בירור הנכס המקורי; לשמור canonical, הפניות וחריגי אינדוקס",
+      "impact": "אתר הבדיקה ללא הפעלת מדידה עסקית; אין להחליף נכס קיים בנכס ריק",
+      "asset": "GTM-5N7NPTL4 / נכס המקור",
+      "capability": "אירועי המקור לפי הסכמה",
+      "technicalStatus": "awaiting_owner",
+      "requiredFor": "public_continuity",
+      "fallback": "המשך האתר המקורי והניהול בכתובת הבדיקה הקיימת; אין שינוי דומיין או תהליך עסקי"
+    },
+    {
+      "id": "backup",
+      "title": "גיבוי ושחזור",
+      "status": "historical",
+      "checkedAt": "2026-10-29T01:03:00Z",
+      "evidence": [
+        {
+          "label": "מסמך מסירה וראיות מתוארכות",
+          "reference": "docs/cutover-handoff-2026-11-01.md"
+        }
+      ],
+      "missing": "נדרשים גיבוי ודלתא טריים סמוך למעבר; אין צורך לבקש שוב גיבוי מקור שכבר התקבל",
+      "owner": "פיתוח",
+      "nextStep": "להשתמש בתהליך הגיבוי המוצפן הקיים ולוודא שחזור סמוך לחלון מאושר",
+      "impact": "שחזור נבדק בעבר; חזרה תשמור מידע חדש ולא תדרוס את מסד WordPress",
+      "asset": "ארכיון WordPress המוצפן / גיבוי CMS קיים",
+      "capability": "התאוששות ושימור מידע",
+      "technicalStatus": "configured_unverified",
+      "requiredFor": "public_continuity",
+      "fallback": "המשך האתר המקורי והניהול בכתובת הבדיקה הקיימת; אין שינוי דומיין או תהליך עסקי"
+    },
+    {
+      "id": "monitoring",
+      "title": "ניטור והתראות",
+      "status": "historical",
+      "checkedAt": "2026-10-29T05:01:00Z",
+      "evidence": [
+        {
+          "label": "מסמך מסירה וראיות מתוארכות",
+          "reference": "docs/cutover-handoff-2026-11-01.md"
+        }
+      ],
+      "missing": "יש לאמת בריאות שירותים ועדכון יעדי הניטור בזמן מעבר מאושר",
+      "owner": "פיתוח",
+      "nextStep": "להשתמש רק בניטור ובתור ההודעות הקיימים; אין שולח נוסף",
+      "impact": "כשל ממושך נועד להתריע בפרטי; אין הוכחת מסירה חדשה במסגרת הכנה מקומית",
+      "asset": "ניטור השרת והבדיקה / שירות ההתראה העצמאית",
+      "capability": "איתור תקלה והתראה פרטית",
+      "technicalStatus": "configured_unverified",
+      "requiredFor": "staff_operations",
+      "fallback": "המשך האתר המקורי והניהול בכתובת הבדיקה הקיימת; אין שינוי דומיין או תהליך עסקי"
+    },
+    {
+      "id": "acceptance",
+      "title": "קבלת האתר וחלון המעבר",
+      "status": "blocked",
+      "checkedAt": "2026-10-31T21:47:09Z",
+      "evidence": [
+        {
+          "label": "מסמך מסירה וראיות מתוארכות",
+          "reference": "docs/cutover-handoff-2026-11-01.md"
+        }
+      ],
+      "missing": "אין עדיין קבלה מפורשת למעבר; כתובת Coreco מועמדת בלבד וטרם חוברה ואומתה",
+      "owner": "ירדן ותיאום Coreco",
+      "nextStep": "לבחור מסלול לאחר אימות הגישות והחיבורים: דומיין המקור כשמוכן או המשך WordPress ואתר בדיקה מוגן",
+      "impact": "1 בנובמבר הוא יעד הכנה בלבד; אין מעבר אוטומטי לפי תאריך",
+      "asset": "קבלת ירדן / חלון המעבר",
+      "capability": "החלטת מעבר או המשך בדיקה",
+      "technicalStatus": "awaiting_owner",
+      "requiredFor": "public_continuity",
+      "fallback": "המשך האתר המקורי והניהול בכתובת הבדיקה הקיימת; אין שינוי דומיין או תהליך עסקי"
+    },
+    {
+      "id": "ga4",
+      "title": "Google Analytics",
+      "asset": "GA4 / G-DV3E8J77EX",
+      "capability": "מדידת פעילות באתר המקורי",
+      "technicalStatus": "configured_unverified",
+      "requiredFor": "public_continuity",
+      "fallback": "המשך תצורת המדידה המקורית ב־WordPress; אין נכס חלופי",
+      "status": "historical",
+      "checkedAt": "2026-10-21T22:10:00Z",
+      "evidence": [
+        {
+          "label": "גישה היסטורית, ללא בדיקת אירועים חדשה",
+          "reference": "docs/cutover-handoff-2026-11-01.md"
+        }
+      ],
+      "missing": "לא אומתה כעת הגעת אירועים לאחר ניתוב או מניעת אירועים כפולים",
+      "owner": "פיתוח וירדן",
+      "nextStep": "לבדוק את הנכס הקיים והסכמה במעבר מאושר; אין שינוי הגדרות במסגרת הכנה מקומית",
+      "impact": "גישה קודמת אינה הוכחת רציפות מדידה אחרי מעבר"
+    },
+    {
+      "id": "meta",
+      "title": "מדידת Meta",
+      "asset": "Meta Pixel / 766863783155971",
+      "capability": "אירועי שיווק מהאתר הקיים",
+      "technicalStatus": "awaiting_owner",
+      "requiredFor": "public_continuity",
+      "fallback": "המשך הנכס המקורי באתר הקיים, ללא פיקסל חלופי",
+      "status": "blocked",
+      "checkedAt": "2026-10-31T21:50:58Z",
+      "evidence": [
+        {
+          "label": "משימה 31 נבדקה במקור",
+          "reference": "docs/cutover-handoff-2026-11-01.md"
+        }
+      ],
+      "missing": "הרשאות נכס המקור ובדיקת אירוע לפי הסכמה טרם אומתו",
+      "owner": "רזיאל לגישה; פיתוח לבדיקה",
+      "nextStep": "להשלים גישה במשימה 31 ולבדוק אירוע בדיקה מאושר בנכס המדויק",
+      "impact": "אין להכריז שרציפות השיווק הושלמה"
+    },
+    {
+      "id": "coreco-hostname",
+      "title": "כתובת בדיקה תחת Coreco",
+      "asset": "derech.coreco.co.il / מועמד בלבד",
+      "capability": "גישה ממותגת לסביבת בדיקה וניהול",
+      "technicalStatus": "not_configured",
+      "requiredFor": "optional",
+      "fallback": "מסלול C: כתובת workers.dev הקיימת עם noindex וכניסה מוגנת ל־CMS",
+      "status": "blocked",
+      "checkedAt": "2026-10-31T21:50:58Z",
+      "evidence": [
+        {
+          "label": "בדיקת יכולת האירוח והגבולות",
+          "reference": "docs/coreco-hostname-capability-2026-10-31.md"
+        }
+      ],
+      "missing": "לא נרשם hostname אצל ספק האירוח; אין יעד CNAME או רשומות אימות שהתקבלו מספק ואין TLS מאומת",
+      "owner": "תיאום Coreco וירדן",
+      "nextStep": "לבחור מסלול custom hostname נתמך ולאמת אותו לפני שינוי DNS; גישת רשם לבדה אינה מספיקה",
+      "impact": "אינו חוסם המשך האתר הישן וסביבת הבדיקה הקיימת; חוסם מסלול B"
+    },
+    {
+      "id": "email-otp",
+      "title": "קוד כניסה במייל למערכת המשותפת",
+      "asset": "ספק מייל משותף / דומיין שולח טרם נבחר",
+      "capability": "חלופת כניסה בקוד מייל",
+      "technicalStatus": "intentionally_disabled",
+      "requiredFor": "optional",
+      "fallback": "כניסת Google המוגדרת בחשבונות המורשים",
+      "status": "unverified",
+      "checkedAt": null,
+      "evidence": [],
+      "missing": "בחירת דומיין שולח ואימותו נדחו במפורש על ידי ירדן",
+      "owner": "ירדן במערכת הכללית",
+      "nextStep": "להשלים רק לאחר בחירת דומיין למערכת המשותפת; אין לפתוח תיבה עסקית חלופית לדרך התקומה",
+      "impact": "אין להציג את האפשרות כמחוברת; אינה תנאי להעברת האתר הציבורי כשכניסה מורשית אחרת מתקבלת"
+    },
+    {
+      "id": "whatsapp",
+      "title": "קישור WhatsApp הקיים",
+      "asset": "WhatsApp Business של דרך התקומה / המספר שאושר",
+      "capability": "פתיחת שיחה דרך הקישור המקורי",
+      "technicalStatus": "legacy_active",
+      "requiredFor": "public_continuity",
+      "fallback": "שימור קישור המקור ופרטי הקשר באתר הישן",
+      "status": "historical",
+      "checkedAt": "2026-10-29T05:01:00Z",
+      "evidence": [
+        {
+          "label": "נכס מקור נשמר; אין אימות מחבר הודעות חדש",
+          "reference": "docs/cutover-handoff-2026-11-01.md"
+        }
+      ],
+      "missing": "פתיחת קישור ושיחה בפועל ממכשיר לא אומתו מחדש",
+      "owner": "רזיאל לקבלה; פיתוח לקישור",
+      "nextStep": "לבדוק קישור ממכשיר בחלון קבלה; לא לשייך קריאת WhatsApp אישית למחבר העסקי",
+      "impact": "אין שליחה אוטומטית חדשה ואין מחבר עסקי חדש שמוכרז כמחובר"
+    }
+  ]
+}
