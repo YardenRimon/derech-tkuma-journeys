@@ -28,3 +28,17 @@ console.log('Shared auth Worker boundary: inbound identity forgery stripped, tru
 
 for(const path of ['/api/submissions/manage','/api/submissions/manage/'])assert.equal(isCmsBrowserPath(path),true);
 for(const path of ['/api/submissions','/api/submissions/','/api/submissions/manage/forged'])assert.equal(isCmsBrowserPath(path),false);
+
+// Explicit central mode retires legacy browser identities, not backend machines.
+for(const path of ['/admin/','/admin/edit/?slug=/','/admin/tasks/','/admin/users/','/login/','/auth/callback/?code=not-forwarded']){
+ const result=await platformAuthBoundary(new Request(origin+path),async()=>{throw Error('Old verifier must never run');},{centralAdmin:true});
+ assert.equal(result.response.status,302);assert.equal(result.response.headers.get('x-coreco-admin-mode'),'central');
+ const target=new URL(result.response.headers.get('location'));assert.equal(target.origin,'https://app.coreco.co.il');assert.equal(target.search,'');
+}
+for(const path of ['/api/cms/page/?slug=/','/api/users/','/api/tasks/','/api/auth/session/']){
+ const result=await platformAuthBoundary(new Request(origin+path),async()=>({identity,cookiesToSet:[]}),{centralAdmin:true});assert.equal(result.response.status,401);
+}
+for(const path of ['/','/api/machine/coreco/content/','/api/machine/execution/','/api/backup/','/media/id']){
+ const result=await platformAuthBoundary(new Request(origin+path),async()=>{throw Error('Public/machine unchanged');},{centralAdmin:true});assert.equal(result.response,undefined);
+}
+console.log('Coreco central mode retires old browser sessions/APIs and preserves public, signed machine, and backup routes.');

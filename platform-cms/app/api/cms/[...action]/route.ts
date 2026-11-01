@@ -29,9 +29,10 @@ function requestedSlug(value: unknown): string {
 }
 function conflict(): never { throw new CmsError(409, "העמוד השתנה מאז שפתחת אותו. טען אותו מחדש לפני שמירה."); }
 
-export async function GET(request: Request) {
+export type EditorIdentity = {userId:string;role:string;canPublish:boolean};
+
+export async function cmsEditorGet(request: Request, user: EditorIdentity) {
   try {
-    const user = await authorizeCmsUser("content");
     const route = action(request);
     const slug = requestedSlug(new URL(request.url).searchParams.get("slug"));
     const base = getBasePage(slug);
@@ -52,14 +53,14 @@ export async function GET(request: Request) {
   } catch (error) { return jsonError(error); }
 }
 
-export async function POST(request: Request) {
+export async function cmsEditorPost(request: Request, user: EditorIdentity) {
   try {
     requireSameOrigin(request);
     const route = action(request);
     if (route !== "upload" && route !== "save" && route !== "publish" && route !== "rollback") {
       throw new CmsError(404, "פעולה לא מוכרת");
     }
-    const user = await authorizeCmsUser(route === "publish" || route === "rollback" ? "publish" : "content");
+    if ((route === "publish" || route === "rollback") && !user.canPublish) throw new CmsError(403,"אין הרשאת פרסום");
     if (route === "upload") return await upload(request);
     const body = await readJson(request);
     const slug = requestedSlug(body.slug);
@@ -159,4 +160,17 @@ async function upload(request: Request) {
   const key = crypto.randomUUID();
   await getBucket().put(key, bytes, { httpMetadata: { contentType, cacheControl: "public, max-age=31536000, immutable" } });
   return noStore({ url: `/media/${key}` }, 201);
+}
+
+// Shared domain handler: legacy browser authorization and Coreco's signed service
+// boundary supply identity separately; all persistence and validation stay here.
+export async function GET(request:Request){
+ try{return await cmsEditorGet(request,await authorizeCmsUser("content"));}catch(error){return jsonError(error);}
+}
+export async function POST(request:Request){
+ try{
+  requireSameOrigin(request);
+  const route=action(request);
+  return await cmsEditorPost(request,await authorizeCmsUser(route==="publish"||route==="rollback"?"publish":"content"));
+ }catch(error){return jsonError(error);}
 }

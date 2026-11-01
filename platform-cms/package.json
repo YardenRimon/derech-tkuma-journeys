@@ -22,7 +22,7 @@
     "build:cloudflare": "node scripts/build-cloudflare.mjs",
     "test:machine-http": "node scripts/test-machine-execution-http.mjs",
     "test:access-workerd": "node scripts/test-cloudflare-access-workerd.mjs",
-    "test:platform-auth": "node scripts/test-platform-auth-provider.mjs && node scripts/test-platform-auth.mjs && node --experimental-strip-types scripts/test-platform-auth-boundary.mjs && node scripts/test-platform-membership.mjs && node scripts/test-login-ui.mjs && node scripts/test-platform-auth-live.mjs && node scripts/test-platform-auth-policy.mjs",
+    "test:platform-auth": "node scripts/test-platform-auth-provider.mjs && node scripts/test-platform-auth.mjs && node --experimental-strip-types scripts/test-platform-auth-boundary.mjs && node scripts/test-platform-membership.mjs && node scripts/test-login-ui.mjs && node scripts/test-platform-auth-live.mjs && node scripts/test-platform-auth-policy.mjs && node scripts/test-coreco-central-live.mjs",
     "test:integrations": "node scripts/test-contact-controls.mjs && node scripts/test-contact-execution.mjs && node --experimental-strip-types scripts/test-seo-drafts.mjs && node scripts/test-seo-machine.mjs",
     "test:production": "node scripts/test-production-profile.mjs && node scripts/test-production-workerd.mjs && node scripts/test-managed-production-workerd.mjs && node scripts/test-production-live.mjs && node ../production/test-production-cd-policy.mjs && node scripts/test-wordpress-continuity.mjs",
     "test:browser": "node scripts/test-production-consent-browser.mjs && node scripts/test-managed-page.mjs --browser && node scripts/test-collection-d1.mjs --browser",

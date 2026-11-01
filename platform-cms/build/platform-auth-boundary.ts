@@ -13,8 +13,22 @@ export function isCmsBrowserPath(pathname: string): boolean {
 type VerifiedIdentity = { userId: string; email: string; displayName: string; fullName: string | null; aal: 'aal1' | 'aal2' };
 type AuthResult = { identity: VerifiedIdentity; cookiesToSet: string[] };
 type AuthFailure = { status?: number; code?: string; cookiesToSet?: string[] };
-export async function platformAuthBoundary(request: Request, verify: (request: Request) => Promise<AuthResult>, policy: { requireMfa?: boolean } = {}): Promise<{ request: Request; response?: Response; cookiesToSet: string[] }> {
+export async function platformAuthBoundary(request: Request, verify: (request: Request) => Promise<AuthResult>, policy: { requireMfa?: boolean; centralAdmin?: boolean } = {}): Promise<{ request: Request; response?: Response; cookiesToSet: string[] }> {
   const url = new URL(request.url);
+  if(policy.centralAdmin){
+    const retired=isCmsBrowserPath(url.pathname)||/^\/(?:login|logout|auth)(?:\/|$)/.test(url.pathname)||/^\/api\/auth(?:\/|$)/.test(url.pathname);
+    if(retired){
+      const headers=new Headers({'cache-control':'private, no-store','x-coreco-admin-mode':'central','x-robots-tag':'noindex, nofollow'});
+      if(['GET','HEAD'].includes(request.method)&&!url.pathname.startsWith('/api/')){
+        const name=url.pathname.split('/').filter(Boolean)[1]??'';
+        const destinations:Record<string,string>={collections:'content/tour',tasks:'tasks',reports:'reports',execution:'execution',users:'../team',readiness:'../connections',dashboard:'../'};
+        const destination=url.pathname.startsWith('/admin')?(destinations[name]??'pages'):null;
+        headers.set('location',destination?new URL(destination,'https://app.coreco.co.il/derech-tkuma/site/').href:'https://app.coreco.co.il/login');
+        return {request,response:new Response(null,{status:302,headers}),cookiesToSet:[]};
+      }
+      return {request,response:Response.json({error:'הניהול עבר לקורקו. יש להתחבר בסביבת הארגון.',code:'coreco_central_auth_required'},{status:401,headers}),cookiesToSet:[]};
+    }
+  }
   if (!isCmsBrowserPath(url.pathname)) return { request, cookiesToSet: [] };
   try {
     const { identity, cookiesToSet } = await verify(request);

@@ -5,6 +5,13 @@ export async function verifyPlatformAuthLive(origin,sha,fetcher=fetch,{requireMf
   const response=await fetcher(origin+path,{redirect:'manual',signal:AbortSignal.timeout(15000),headers:{'user-agent':'DerechSharedAuthVerifier/1.0','x-platform-authenticated-id':'forged','x-platform-authenticated-email':'22yarden22@gmail.com','x-platform-authenticated-aal':'aal2','oai-authenticated-user-id':'forged','cf-access-jwt-assertion':'forged'}});
   const check={path,status:response.status,passed:false};
   const safe=response.headers.get('x-derech-release')===sha&&response.headers.get('x-robots-tag')?.includes('noindex');
+  if(response.headers.get('x-coreco-admin-mode')==='central'){
+   if(path==='/login/'||path==='/admin/'){
+    let target;try{target=new URL(response.headers.get('location'));}catch{}
+    check.passed=Boolean(safe&&response.status===302&&response.headers.get('cache-control')?.includes('no-store')&&target?.origin==='https://app.coreco.co.il'&&(path==='/login/'?target.pathname==='/login':target.pathname==='/derech-tkuma/site/pages'));
+   }else check.passed=Boolean(safe&&response.status===401&&!response.headers.has('location'));
+   await response.body?.cancel();checks.push(check);continue;
+  }
   if(path==='/login/'){
    const html=await response.text(),csp=response.headers.get('content-security-policy')??'';
    check.passed=Boolean(safe&&response.status===200&&response.headers.get('cache-control')?.includes('no-store')&&html.length<100000&&html.includes('google-login')&&html.includes('email-code')&&html.includes('mfa-code')&&/script-src 'nonce-[a-f0-9]+/.test(csp)&&csp.includes("frame-ancestors 'none'"));

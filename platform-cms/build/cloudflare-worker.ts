@@ -10,7 +10,7 @@ export default {
   // Caller-controlled Sites identity headers never cross the standalone boundary.
   const strippedRequest=stripIdentityHeaders(request);
   const headers=new Headers(strippedRequest.headers);
-  const config=env as unknown as {PLATFORM_RELEASE_SHA?:string;PLATFORM_RELEASE_STAGE?:string;CF_ACCESS_ISSUER?:string;CF_ACCESS_AUDIENCE?:string;CF_ACCESS_DIAGNOSTICS?:string};
+  const config=env as unknown as {PLATFORM_RELEASE_SHA?:string;PLATFORM_RELEASE_STAGE?:string;CF_ACCESS_ISSUER?:string;CF_ACCESS_AUDIENCE?:string;CF_ACCESS_DIAGNOSTICS?:string;CORECO_ADMIN_MODE?:string;CMS_TENANT_ID?:string;CMS_SITE_ID?:string};
   // A visitor cannot opt a request into diagnostics or carry a forged scope marker.
   headers.delete(ACCESS_DIAGNOSTIC_SCOPE_HEADER);
   if(accessDiagnosticsEnabled(config)&&accessDiagnosticPath(new URL(request.url).pathname)){
@@ -23,7 +23,7 @@ export default {
   let authCookies:string[]=[];
   let authResponse:Response|undefined;
   if(__PLATFORM_AUTH_PROVIDER__==='supabase'){
-   const authenticated=await platformAuthBoundary(sanitizedRequest,(input)=>readPlatformAuthIdentity(input,{requireAal2:__PLATFORM_AUTH_REQUIRE_MFA__}),{requireMfa:__PLATFORM_AUTH_REQUIRE_MFA__});
+   const authenticated=await platformAuthBoundary(sanitizedRequest,(input)=>readPlatformAuthIdentity(input,{requireAal2:__PLATFORM_AUTH_REQUIRE_MFA__}),{requireMfa:__PLATFORM_AUTH_REQUIRE_MFA__,centralAdmin:config.CORECO_ADMIN_MODE==='central'&&config.CMS_TENANT_ID==='derech'&&config.CMS_SITE_ID==='derech-main'});
    sanitizedRequest=authenticated.request;authCookies=authenticated.cookiesToSet;authResponse=authenticated.response;
   }
   const response=config.PLATFORM_RELEASE_STAGE!=='review'||!config.CF_ACCESS_ISSUER||!config.CF_ACCESS_AUDIENCE

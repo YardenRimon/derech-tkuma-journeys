@@ -28,11 +28,11 @@ export default{
    return rejected(421);
   }
   if((/^\/api\/contact\/?$/.test(url.pathname)&&!profile.contactReady)||(/^\/api\/(?:payment|payments|orders)(?:\/|$)/.test(url.pathname)&&!profile.paymentsReady))return rejected();
-  const config=env as unknown as {PLATFORM_RELEASE_STAGE?:string;PLATFORM_RELEASE_SHA?:string;PLATFORM_PUBLIC_ORIGIN?:string;CMS_TENANT_ID?:string;CMS_SITE_ID?:string};
+  const config=env as unknown as {PLATFORM_RELEASE_STAGE?:string;PLATFORM_RELEASE_SHA?:string;PLATFORM_PUBLIC_ORIGIN?:string;CMS_TENANT_ID?:string;CMS_SITE_ID?:string;CORECO_ADMIN_MODE?:string};
   if(config.PLATFORM_RELEASE_STAGE!=='production'||config.PLATFORM_RELEASE_SHA!==profile.sourceCommit||config.PLATFORM_PUBLIC_ORIGIN!==profile.origin||config.CMS_TENANT_ID!=='derech'||config.CMS_SITE_ID!=='derech-main')return rejected();
   if(['GET','HEAD'].includes(request.method)&&managedSitemapPath(url.pathname)){try{const sitemap=await managedSitemapResponse(request,env,{tenantId:'derech',siteId:'derech-main'},profile);if(sitemap){sitemap.headers.delete('x-derech-public-profile');sitemap.headers.set('x-derech-release',profile.sourceCommit);return sitemap;}}catch{return rejected();}}
   if(['GET','HEAD'].includes(request.method)&&['/robots.txt','/sitemap.xml'].includes(url.pathname))return new Response(request.method==='HEAD'?null:url.pathname==='/robots.txt'?productionRobots(profile):productionSitemap(),{headers:{'content-type':url.pathname==='/robots.txt'?'text/plain; charset=utf-8':'application/xml; charset=utf-8','cache-control':'no-store','x-derech-release':profile.sourceCommit,'x-content-type-options':'nosniff'}});
-  const stripped=stripIdentityHeaders(request),boundary=await platformAuthBoundary(stripped,input=>readPlatformAuthIdentity(input,{requireAal2:__PLATFORM_AUTH_REQUIRE_MFA__}),{requireMfa:__PLATFORM_AUTH_REQUIRE_MFA__});
+  const stripped=stripIdentityHeaders(request),boundary=await platformAuthBoundary(stripped,input=>readPlatformAuthIdentity(input,{requireAal2:__PLATFORM_AUTH_REQUIRE_MFA__}),{requireMfa:__PLATFORM_AUTH_REQUIRE_MFA__,centralAdmin:config.CORECO_ADMIN_MODE==='central'&&config.CMS_TENANT_ID==='derech'&&config.CMS_SITE_ID==='derech-main'});
   let response=boundary.response??await serveCloudflareBuildAsset(boundary.request,env as Cloudflare.Env&{ASSETS?:{fetch:(request:Request)=>Promise<Response>}})??await handler.fetch(boundary.request,env,ctx);
   if(continuity&&!boundary.response&&(productionPublicPath(url.pathname)||managedCandidate(url.pathname))){try{response=await prepareWordPressForms(response,boundary.request);}catch{return rejected();}}
   const result=boundary.cookiesToSet.length?appendPlatformAuthCookies(response,boundary.cookiesToSet):new Response(response.body,response);
