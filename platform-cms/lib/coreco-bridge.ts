@@ -17,3 +17,11 @@ export async function verifyCorecoBridge(request:Request,body:string,config:{key
  if(!await consume(claims.nonce,claims.ts+21))fail();
  return claims;
 }
+
+/** Reuse the existing transient auth-abuse store with a disjoint key namespace.
+ * No business schema or backup contract changes; atomic PK insert rejects replay. */
+export async function consumeCorecoNonce(db:D1Database,nonce:string,expires:number,now=Math.floor(Date.now()/1000)):Promise<boolean>{
+ const result=await db.prepare('INSERT OR IGNORE INTO platform_auth_rate_limits(bucket_key,window_start,attempts,expires_at) VALUES(?,?,1,?)').bind('coreco-replay:'+nonce,now,expires).run();
+ await db.prepare("DELETE FROM platform_auth_rate_limits WHERE bucket_key IN (SELECT bucket_key FROM platform_auth_rate_limits WHERE bucket_key LIKE 'coreco-replay:%' AND expires_at < ? LIMIT 100)").bind(now).run();
+ return result.meta.changes===1;
+}

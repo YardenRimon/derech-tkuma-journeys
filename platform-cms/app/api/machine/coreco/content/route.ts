@@ -3,18 +3,14 @@ import { getD1, jsonError } from '@/lib/cms';
 import { assertIsolatedD1Scope, CmsError } from '@/lib/access';
 import { Collections, CollectionError,kindOf,resourceId,type Change } from '@/lib/collection-core';
 import { D1Collections } from '@/lib/collection-d1';
-import { verifyCorecoBridge, CorecoBridgeError } from '@/lib/coreco-bridge';
+import { verifyCorecoBridge, CorecoBridgeError,consumeCorecoNonce } from '@/lib/coreco-bridge';
 export const dynamic='force-dynamic';
 export async function POST(request:Request){
  try{
   const text=await request.text();if(new TextEncoder().encode(text).length>50000)throw new CmsError(413,'הבקשה גדולה מדי');
   const config=env as unknown as {CORECO_BRIDGE_KEY?:string;CMS_TENANT_ID?:string;CMS_SITE_ID?:string};
   const db=getD1();
-  const identity=await verifyCorecoBridge(request,text,{key:config.CORECO_BRIDGE_KEY,tenant:config.CMS_TENANT_ID,site:config.CMS_SITE_ID},async(nonce,expires)=>{
-   const result=await db.prepare('INSERT OR IGNORE INTO cms_coreco_nonces(nonce,expires_at) VALUES(?,?)').bind(nonce,expires).run();
-   await db.prepare('DELETE FROM cms_coreco_nonces WHERE expires_at < ?').bind(Math.floor(Date.now()/1000)).run();
-   return result.meta.changes===1;
-  });
+  const identity=await verifyCorecoBridge(request,text,{key:config.CORECO_BRIDGE_KEY,tenant:config.CMS_TENANT_ID,site:config.CMS_SITE_ID},(nonce,expires)=>consumeCorecoNonce(db,nonce,expires));
   await assertIsolatedD1Scope(db);
   let body;try{body=JSON.parse(text);}catch{throw new CmsError(400,'בקשה אינה תקינה');}
   if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).some(x=>!['operation','kind','cursor','id','expectedRevision','content'].includes(x)))throw new CmsError(400,'בקשה אינה תקינה');
